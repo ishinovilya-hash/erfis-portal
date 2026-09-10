@@ -15,3 +15,6 @@ server/data/_logo.json
 /RESUME.md
 /id_rsa
 /id_rsa.pub
+
+server/data/_*.txt
+server/data/_*.json
