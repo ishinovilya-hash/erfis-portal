@@ -18,3 +18,7 @@ server/data/_logo.json
 
 server/data/_*.txt
 server/data/_*.json
+
+# демо: хранится только исходник + сборщик
+demo/index.html
+demo/artifact.html
