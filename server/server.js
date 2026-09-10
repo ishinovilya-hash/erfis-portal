@@ -654,6 +654,20 @@ route('POST', '/api/admin/import', async (req, res) => {
   json(res, 200, { imported: n });
 });
 
+// Сброс паролей всех сотрудников — с ноутбука по HTTPS через туннель.
+route('POST', '/api/admin/passwords', async (req, res) => {
+  if (!DEPLOY_KEY || req.headers['x-deploy-key'] !== DEPLOY_KEY) return json(res, 403, { error: 'forbidden' });
+  const out = [];
+  for (const e of EMPLOYEES) {
+    const pw = randomBytes(6).toString('base64url');
+    db.prepare('UPDATE users SET pass_hash = ?, must_change = 1 WHERE id = ?').run(hashPassword(pw), e.id);
+    out.push({ email: e.email, name: e.name, password: pw });
+  }
+  db.prepare('DELETE FROM sessions').run();
+  logActivity('password', null, 'Сброшены пароли всех сотрудников (админ)', null);
+  json(res, 200, { users: out });
+});
+
 route('GET', '/api/admin/logs', async (req, res) => {
   if (!DEPLOY_KEY || req.headers['x-deploy-key'] !== DEPLOY_KEY) return text(res, 403, 'forbidden');
   execFile('bash', ['-lc', 'journalctl -u erfis-portal -n 200 --no-pager 2>/dev/null || true'],

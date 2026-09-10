@@ -34,9 +34,11 @@ usermod -aG systemd-journal "$SVC_USER" || true
 mkdir -p "$DATA_DIR"
 
 say "Код портала"
+git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
 if [ -d "$APP_DIR/.git" ]; then
   git -C "$APP_DIR" fetch --all -q
   git -C "$APP_DIR" reset --hard "origin/$BRANCH" -q
+  git -C "$APP_DIR" clean -fd -q -e server/data
 else
   git clone -q -b "$BRANCH" "$REPO" "$APP_DIR"
 fi
