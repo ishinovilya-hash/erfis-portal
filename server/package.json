@@ -1,0 +1,14 @@
+{
+  "name": "erfis-portal",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Внутренний портал ЭРФИС — реестры товарных знаков и патентов",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "import": "node import.js"
+  },
+  "engines": { "node": ">=22.5" },
+  "dependencies": {}
+}

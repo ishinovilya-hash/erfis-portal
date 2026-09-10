@@ -1,0 +1,961 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light dark" />
+<title>Реестр объектов ЭРФИС</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+<style>
+:root{
+  --paper:#F4F5F8; --surface:#FFFFFF; --surface-2:#FAFAFC;
+  --ink:#0B0B2E; --ink-2:#4B4D68; --ink-3:#83859E;
+  --hairline:#E4E5EC; --hairline-2:#EEEFF3;
+  --brand:#050038; --accent:#2C3B9B; --accent-ink:#FFFFFF; --accent-soft:#ECEEFA;
+  --ok:#1C7A55; --ok-bg:#E5F2EC;
+  --warn:#8A5A0E; --warn-bg:#FaEDD4;
+  --flag-bg:#FFF7DF; --flag-edge:#D9A63A;
+  --crit:#A63A3A; --crit-bg:#F6E4E4;
+  --shadow-sm:0 1px 2px rgba(11,11,46,.06);
+  --shadow-lg:0 2px 6px rgba(11,11,46,.06),0 20px 48px -20px rgba(11,11,46,.28);
+  --r:9px;
+  color-scheme:light;
+}
+:root:not([data-theme="light"]){
+  @media (prefers-color-scheme:dark){
+    --paper:#09091A; --surface:#131330; --surface-2:#1A1A3B;
+    --ink:#ECEDF6; --ink-2:#A8AAC8; --ink-3:#6C6E96;
+    --hairline:#282852; --hairline-2:#20204A;
+    --brand:#0A0A28; --accent:#8C98EC; --accent-ink:#0A0A1C; --accent-soft:#1D1D45;
+    --ok:#5FC79E; --ok-bg:#122820;
+    --warn:#E1AB4E; --warn-bg:#2C2210;
+    --flag-bg:#2A2410; --flag-edge:#7E6127;
+    --crit:#E98C8C; --crit-bg:#2E1717;
+    --shadow-lg:0 2px 6px rgba(0,0,0,.3),0 20px 48px -20px rgba(0,0,0,.6);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#09091A; --surface:#131330; --surface-2:#1A1A3B;
+  --ink:#ECEDF6; --ink-2:#A8AAC8; --ink-3:#6C6E96;
+  --hairline:#282852; --hairline-2:#20204A;
+  --brand:#0A0A28; --accent:#8C98EC; --accent-ink:#0A0A1C; --accent-soft:#1D1D45;
+  --ok:#5FC79E; --ok-bg:#122820;
+  --warn:#E1AB4E; --warn-bg:#2C2210;
+  --flag-bg:#2A2410; --flag-edge:#7E6127;
+  --crit:#E98C8C; --crit-bg:#2E1717;
+  --shadow-lg:0 2px 6px rgba(0,0,0,.3),0 20px 48px -20px rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{font-family:"Source Serif 4","Iowan Old Style",Georgia,serif;font-weight:600;margin:0;letter-spacing:-.01em;text-wrap:balance}
+button{font:inherit;color:inherit;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+::selection{background:var(--accent-soft)}
+.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+#app{display:flex;min-height:100vh}
+.side{width:236px;flex:0 0 236px;background:var(--brand);color:#C9CADE;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.side .brand{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:22px 20px 18px}
+.side .brand .logo-full{width:84px;height:auto;color:#fff;display:block}
+.side .brand .sub{font-size:10px;letter-spacing:.14em;color:#8082A6;text-transform:uppercase}
+.nav{display:flex;flex-direction:column;gap:1px;padding:6px 12px;margin-top:4px}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;color:#AEB0CC;text-decoration:none;font-weight:500;font-size:13.5px}
+.nav a .ic{width:16px;height:16px;flex:0 0 auto;opacity:.85}
+.nav a:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav a.active{background:rgba(255,255,255,.11);color:#fff}
+.nav a .count{margin-left:auto;font-size:11px;background:rgba(255,255,255,.14);padding:1px 7px;border-radius:20px}
+.nav a.flag .count{background:var(--flag-edge);color:#241c00}
+.nav .sec{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#63658C;padding:16px 12px 6px}
+.side .foot{margin-top:auto;padding:14px 16px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#6C6E96;line-height:1.4}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;gap:14px;padding:14px 26px;border-bottom:1px solid var(--hairline);background:var(--surface);position:sticky;top:0;z-index:20}
+.topbar h1{font-size:19px}
+.topbar .crumb{font-size:12px;color:var(--ink-3);letter-spacing:.02em}
+.search{position:relative;margin-left:auto;width:min(340px,38vw)}
+.search input{width:100%;padding:8px 12px 8px 32px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface-2)}
+.search svg{position:absolute;left:9px;top:9px;width:15px;height:15px;color:var(--ink-3)}
+.iconbtn{width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--hairline);background:var(--surface-2);border-radius:8px;position:relative;color:var(--ink-2)}
+.iconbtn:hover{color:var(--ink);border-color:var(--ink-3)}
+.iconbtn .dot{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;background:var(--flag-edge);color:#241c00;font-size:10px;font-weight:600;display:grid;place-items:center}
+.userchip{display:flex;align-items:center;gap:8px;padding:5px 6px 5px 5px;border:1px solid var(--hairline);border-radius:20px;background:var(--surface-2)}
+.userchip button{background:none;border:0;color:var(--ink-3);font-size:12px;padding:0 4px}
+.userchip button:hover{color:var(--crit)}
+.avatar{width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:11px;font-weight:600;flex:0 0 auto}
+.avatar.sm{width:20px;height:20px;font-size:10px}
+.avatar.dim{background:var(--hairline);color:var(--ink-3)}
+
+.content{padding:22px 26px 60px;flex:1}
+.demoline{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--ink-3);background:var(--surface-2);border:1px solid var(--hairline);padding:7px 12px;border-radius:8px;margin-bottom:16px}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-bottom:14px}
+.chipfilter{display:flex;align-items:center;gap:6px;border:1px solid var(--hairline);background:var(--surface);padding:6px 11px;border-radius:8px;font-size:13px;color:var(--ink-2)}
+.chipfilter select{border:0;background:transparent;font-weight:500;color:var(--ink);padding:0;margin-left:2px}
+.seg{display:flex;border:1px solid var(--hairline);border-radius:8px;overflow:hidden}
+.seg button{padding:6px 12px;background:var(--surface);border:0;font-size:13px;color:var(--ink-2);border-left:1px solid var(--hairline)}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:8px;border:1px solid var(--hairline);background:var(--surface);font-weight:500}
+.btn:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn:disabled{opacity:.5;pointer-events:none}
+.btn svg{width:15px;height:15px}
+.spacer{margin-left:auto}
+.count-note{font-size:12.5px;color:var(--ink-3)}
+
+.tablewrap{border:1px solid var(--hairline);border-radius:var(--r);overflow:auto;background:var(--surface);box-shadow:var(--shadow-sm)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+thead th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-weight:600;color:var(--ink-2);padding:10px 12px;border-bottom:1px solid var(--hairline);white-space:nowrap;font-size:12px;letter-spacing:.02em;z-index:1}
+thead th.sortable{cursor:pointer;user-select:none}
+thead th .arw{color:var(--accent);font-size:10px}
+tbody td{padding:9px 12px;border-bottom:1px solid var(--hairline-2);vertical-align:top}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:0}
+tbody tr.flag{background:var(--flag-bg);box-shadow:inset 3px 0 0 var(--flag-edge)}
+tbody tr.flag:hover{background:color-mix(in srgb,var(--flag-bg) 88%,var(--ink))}
+td.name{font-weight:500;max-width:280px}
+td.holder{color:var(--ink-2);max-width:230px}
+td.num{white-space:nowrap}
+.tag{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:600;letter-spacing:.01em;white-space:nowrap}
+.tag.active{background:var(--ok-bg);color:var(--ok)}
+.tag.expiring{background:var(--warn-bg);color:var(--warn)}
+.tag.expired{background:var(--crit-bg);color:var(--crit)}
+.tag.none{background:var(--hairline-2);color:var(--ink-3)}
+.tag .pip{width:6px;height:6px;border-radius:50%;background:currentColor}
+.otype{display:inline-block;padding:1px 7px;border:1px solid var(--hairline);border-radius:5px;font-size:11px;font-weight:600;color:var(--ink-2)}
+.bell-clock{color:var(--flag-edge)}
+.respcell{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.empty{padding:60px 20px;text-align:center;color:var(--ink-3)}
+.empty h3{font-size:16px;color:var(--ink-2);margin-bottom:4px}
+
+.scrim{position:fixed;inset:0;background:rgba(9,9,26,.42);backdrop-filter:blur(1px);z-index:40;opacity:0;pointer-events:none;transition:opacity .18s}
+.scrim.open{opacity:1;pointer-events:auto}
+.panel{position:fixed;top:0;right:0;height:100%;width:min(500px,94vw);background:var(--surface);border-left:1px solid var(--hairline);z-index:50;transform:translateX(100%);transition:transform .22s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:var(--shadow-lg)}
+.panel.open{transform:none}
+.panel header{display:flex;align-items:flex-start;gap:12px;padding:18px 20px;border-bottom:1px solid var(--hairline)}
+.panel header .eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.panel header h2{font-size:18px;margin-top:3px;line-height:1.25}
+.panel .body{overflow:auto;padding:6px 20px 30px;flex:1}
+.panel .close{margin-left:auto;flex:0 0 auto;width:30px;height:30px;border-radius:7px;border:1px solid var(--hairline);background:var(--surface-2);display:grid;place-items:center}
+.field{padding:13px 0;border-bottom:1px solid var(--hairline-2)}
+.field label{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px}
+.field .val{font-size:14px;white-space:pre-wrap}
+.field input,.field select,.field textarea{width:100%;padding:8px 10px;border:1px solid var(--hairline);border-radius:7px;background:var(--surface-2)}
+.field textarea{resize:vertical;min-height:60px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.reminderbox{margin:14px 0;border:1px solid var(--hairline);border-radius:var(--r);overflow:hidden}
+.reminderbox .rb-head{display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--surface-2);font-weight:600;font-size:13px}
+.reminderbox.due .rb-head{background:var(--flag-bg);color:var(--warn)}
+.reminderbox .rb-body{padding:14px}
+.reminderbox .rb-body label{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
+.reminderbox .rb-body input{width:100%;padding:8px 10px;border:1px solid var(--hairline);border-radius:7px;background:var(--surface-2);margin-top:4px}
+.hint{font-size:12px;color:var(--ink-3);margin-top:6px}
+.hint.warn{color:var(--warn)}
+.panel .actions{display:flex;gap:9px;padding:14px 20px;border-top:1px solid var(--hairline);background:var(--surface)}
+.danger{color:var(--crit)!important;border-color:color-mix(in srgb,var(--crit) 40%,transparent)!important}
+.disabledwrap{opacity:.55}
+
+.bellmenu{position:absolute;top:44px;right:0;width:340px;background:var(--surface);border:1px solid var(--hairline);border-radius:var(--r);box-shadow:var(--shadow-lg);z-index:30;overflow:hidden}
+.bellmenu h4{padding:12px 14px;font-family:inherit;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);border-bottom:1px solid var(--hairline);font-weight:600;margin:0}
+.bellitem{display:flex;gap:10px;padding:11px 14px;border-bottom:1px solid var(--hairline-2);font-size:13px}
+.bellitem:hover{background:var(--surface-2)}
+.bellitem:last-child{border-bottom:0}
+.bellitem .ib-t{font-weight:500}
+.bellitem .ib-m{color:var(--ink-3);font-size:12px}
+#toasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{background:var(--brand);color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;box-shadow:var(--shadow-lg);animation:rise .2s ease;max-width:90vw;text-align:center}
+.toast.err{background:var(--crit)}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}}
+
+.listcard{border:1px solid var(--hairline);border-radius:var(--r);background:var(--surface);overflow:hidden;box-shadow:var(--shadow-sm)}
+.lrow{display:flex;align-items:center;gap:14px;padding:13px 16px;border-bottom:1px solid var(--hairline-2)}
+.lrow:last-child{border-bottom:0}
+.lrow:hover{background:var(--surface-2)}
+.lrow .lr-main{flex:1;min-width:0}
+.lrow .lr-t{font-weight:500}
+.lrow .lr-s{font-size:12.5px;color:var(--ink-3)}
+.lrow.due{background:var(--flag-bg);box-shadow:inset 3px 0 0 var(--flag-edge)}
+.when{font-size:12px;color:var(--ink-3);white-space:nowrap;font-family:"IBM Plex Mono",monospace}
+
+#login{position:fixed;inset:0;z-index:100;background:var(--brand);color:#EDEEF6;display:grid;place-items:center;padding:24px}
+#login .card{max-width:380px;width:100%;text-align:center}
+#login .login-logo{width:184px;height:auto;color:#EDEEF6;margin:0 auto 18px;display:block}
+#login h1{font-size:24px;color:#fff;font-weight:600}
+#login p{color:#9698BE;font-size:13.5px;margin:8px 0 24px;line-height:1.55}
+#login form{display:flex;flex-direction:column;gap:10px;text-align:left}
+#login label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8789AE}
+#login input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;margin-top:4px}
+#login input:focus{outline:2px solid #6f7bd6}
+#login .submit{margin-top:6px;padding:11px;border-radius:8px;background:#fff;color:#0B0B2E;border:0;font-weight:600}
+#login .submit:hover{filter:brightness(.95)}
+#login .err{color:#F1A9A9;font-size:12.5px;min-height:1em}
+#login .fine{margin-top:16px;font-size:11.5px;color:#63658C;line-height:1.5}
+
+.pageloader{display:grid;place-items:center;min-height:60vh;color:var(--ink-3)}
+
+@media (max-width:880px){
+  .side{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .2s;z-index:60}
+  .side.open{transform:none}
+  .main{width:100%}
+  .content{padding:16px 14px 50px}
+  .topbar{padding:12px 14px}
+  .search{width:auto;flex:1}
+  .menutoggle{display:grid!important}
+}
+.menutoggle{display:none}
+</style>
+</head>
+<body>
+
+<div id="login" hidden>
+  <div class="card">
+    <svg class="login-logo" viewBox="0 0 1035.44 390.694" aria-label="ERFIS"><g fill="currentColor" data-logo="full"></g></svg>
+    <h1>Реестр объектов</h1>
+    <p>Внутренний портал ЭРФИС. Доступ только для сотрудников.</p>
+    <form id="loginform">
+      <div><label for="li-email">Рабочая почта</label><input id="li-email" type="email" autocomplete="username" required /></div>
+      <div><label for="li-pass">Пароль</label><input id="li-pass" type="password" autocomplete="current-password" required /></div>
+      <div class="err" id="li-err"></div>
+      <button class="submit" type="submit">Войти</button>
+    </form>
+    <div class="fine">Скоро — вход через корпоративный VK WorkSpace.</div>
+  </div>
+</div>
+
+<div id="pwchange" hidden>
+  <div class="card" style="max-width:380px;width:100%">
+    <h1 style="font-size:22px">Задайте свой пароль</h1>
+    <p>Вы вошли по временному паролю. Придумайте постоянный (минимум 8 символов).</p>
+    <form id="pwform">
+      <div><label for="pw-cur">Текущий (временный) пароль</label><input id="pw-cur" type="password" required /></div>
+      <div><label for="pw-new">Новый пароль</label><input id="pw-new" type="password" minlength="8" required /></div>
+      <div class="err" id="pw-err"></div>
+      <button class="submit" type="submit">Сохранить</button>
+    </form>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <aside class="side" id="side">
+    <div class="brand">
+      <svg class="logo-full" viewBox="0 0 1035.44 390.694" aria-label="ERFIS"><g fill="currentColor" data-logo="full"></g></svg>
+      <div class="sub">Портал сотрудников</div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="foot" id="foot">Реестр объектов ЭРФИС</div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="iconbtn menutoggle" id="menutoggle" aria-label="Меню">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <div>
+        <div class="crumb" id="crumb">Реестр объектов</div>
+        <h1 id="pagetitle">Реестр товарных знаков</h1>
+      </div>
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="search" placeholder="Поиск по названию, правообладателю, номеру…" autocomplete="off" />
+      </div>
+      <button class="iconbtn" id="themebtn" aria-label="Тема">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6 6 4.5 4.5M19.5 19.5 18 18M18 6l1.5-1.5M4.5 19.5 6 18"/><circle cx="12" cy="12" r="4"/></svg>
+      </button>
+      <div style="position:relative">
+        <button class="iconbtn" id="bellbtn" aria-label="Напоминания">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          <span class="dot" id="belldot" hidden>0</span>
+        </button>
+        <div id="bellmenu"></div>
+      </div>
+      <div class="userchip">
+        <span class="avatar" id="meavatar">—</span>
+        <span id="mename" style="font-size:13px;font-weight:500">—</span>
+        <button id="logoutbtn" title="Выйти">Выйти</button>
+      </div>
+    </div>
+    <div class="content" id="view"><div class="pageloader">Загрузка…</div></div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="panel" id="panel" aria-hidden="true"></aside>
+<div id="toasts"></div>
+
+<script src="/logo.js"></script>
+<script>
+(function(){
+  const paths = (window.ERFIS_LOGO || {emblem:[],word:[]});
+  const full = [...(paths.emblem||[]), ...(paths.word||[])].map(d=>`<path d="${d}"/>`).join('');
+  document.querySelectorAll('[data-logo="full"]').forEach(el=> el.innerHTML = full);
+})();
+
+const OTYPE = {"ИЗ":"Изобретение","ПМ":"Полезная модель","ПО":"Промышленный образец"};
+const DAY = 86400000;
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const state = {
+  me:null, users:[], byId:{},
+  route:'trademarks',
+  objects:{trademark:null, patent:null},
+  reminders:null, trash:null, activity:null,
+  ui:{sort:{key:'holder',dir:1}, status:'', resp:'', flag:'', q:''},
+  panel:null,
+  bellOpen:false,
+  theme: null,
+};
+
+/* ---------- api ---------- */
+async function api(path, opts={}){
+  const r = await fetch('/api'+path, {
+    credentials:'same-origin',
+    headers: opts.body ? {'Content-Type':'application/json'} : {},
+    ...opts,
+  });
+  if(r.status===401){ showLogin(); throw new Error('Не авторизован'); }
+  const ct = r.headers.get('content-type')||'';
+  const data = ct.includes('json') ? await r.json() : await r.text();
+  if(!r.ok) throw new Error((data && data.error) || ('Ошибка '+r.status));
+  return data;
+}
+const jbody = o => JSON.stringify(o);
+
+/* ---------- toast ---------- */
+function toast(msg, err){
+  const t = document.createElement('div');
+  t.className = 'toast'+(err?' err':'');
+  t.textContent = msg;
+  $('#toasts').appendChild(t);
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, err?4200:2600);
+}
+
+/* ---------- helpers ---------- */
+function fmt(d){
+  if(!d) return '—';
+  const p = String(d).slice(0,10).split('-');
+  return p.length===3 ? `${p[2]}.${p[1]}.${p[0]}` : d;
+}
+function fmtDT(iso){
+  const dt = new Date(iso);
+  if(isNaN(dt)) return '';
+  const p = n => String(n).padStart(2,'0');
+  return `${p(dt.getDate())}.${p(dt.getMonth()+1)} ${p(dt.getHours())}:${p(dt.getMinutes())}`;
+}
+const userName = id => state.byId[id]?.name || null;
+const userInit = id => state.byId[id]?.init || null;
+function reminderDue(r){ if(!r || r.acknowledged) return false; return new Date(`${r.date}T${r.time||'00:00'}:00`) <= new Date(); }
+function firstName(n){ return (n||'').split(' ')[0]; }
+
+/* ---------- routing ---------- */
+const ROUTES = {
+  trademarks:{title:'Реестр товарных знаков', crumb:'Реестр объектов', type:'trademark'},
+  patents:{title:'Реестр патентов', crumb:'Реестр объектов', type:'patent'},
+  reminders:{title:'Напоминания о продлении', crumb:'Контроль сроков'},
+  trash:{title:'Корзина', crumb:'Служебное'},
+  log:{title:'Журнал изменений', crumb:'Служебное'},
+};
+function go(r){
+  if(!ROUTES[r]) r='trademarks';
+  state.route = r;
+  state.ui.sort = {key:'holder',dir:1};
+  state.ui.status=''; state.ui.resp=''; state.ui.flag='';
+  history.replaceState(null,'','#/'+r);
+  renderAll();
+}
+window.addEventListener('hashchange', ()=>{
+  const r = location.hash.replace('#/','') || 'trademarks';
+  if(r!==state.route && ROUTES[r]){ state.route=r; renderAll(); }
+});
+
+/* ---------- data loading ---------- */
+async function loadRoute(){
+  const r = state.route;
+  if(r==='trademarks') state.objects.trademark = (await api('/objects?type=trademark')).objects;
+  else if(r==='patents') state.objects.patent = (await api('/objects?type=patent')).objects;
+  else if(r==='reminders') state.reminders = (await api('/reminders')).reminders;
+  else if(r==='trash') state.trash = (await api('/trash')).trash;
+  else if(r==='log') state.activity = (await api('/activity?limit=400')).activity;
+}
+async function loadCounts(){
+  try{ state.health = await api('/health'); }catch(e){}
+}
+async function refresh(){
+  await Promise.all([loadRoute(), loadCounts()]);
+  renderAll();
+}
+
+/* ---------- nav ---------- */
+function renderNav(){
+  const h = state.health || {};
+  const dueTotal = (h.remindersDue!=null) ? h.remindersDue : (state.reminders? state.reminders.filter(x=>reminderDue(x.reminder)).length : null);
+  const items = [
+    {sec:'Реестр объектов'},
+    {r:'trademarks', label:'Товарные знаки', count:h.trademarks, ic:'M4 7h16M4 12h16M4 17h10'},
+    {r:'patents', label:'Патенты', count:h.patents, ic:'M12 3l8 4-8 4-8-4 8-4Zm-8 9 8 4 8-4M4 16l8 4 8-4'},
+    {sec:'Контроль сроков'},
+    {r:'reminders', label:'Напоминания', count:dueTotal||null, flag:!!dueTotal, ic:'M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'},
+    {sec:'Служебное'},
+    {r:'trash', label:'Корзина', count:h.trash||null, ic:'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13'},
+    {r:'log', label:'Журнал изменений', ic:'M8 6h11M8 12h11M8 18h11M3.5 6h.01M3.5 12h.01M3.5 18h.01'},
+    {sec:'Скоро'},
+    {label:'CRM · сделки', soon:true, ic:'M3 3v18h18'},
+    {label:'Договоры', soon:true, ic:'M7 3h7l5 5v13H7z'},
+    {label:'Документы (PDF)', soon:true, ic:'M7 3h7l5 5v13H7z'},
+  ];
+  $('#nav').innerHTML = items.map(it=>{
+    if(it.sec) return `<div class="sec">${it.sec}</div>`;
+    if(it.soon) return `<a style="opacity:.4;pointer-events:none"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="${it.ic}"/></svg>${it.label}<span class="count">скоро</span></a>`;
+    return `<a href="#/${it.r}" data-r="${it.r}" class="${state.route===it.r?'active':''} ${it.flag?'flag':''}">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="${it.ic}"/></svg>
+      ${it.label}${it.count?`<span class="count">${it.count}</span>`:''}</a>`;
+  }).join('');
+}
+
+/* ---------- registry view ---------- */
+const TM_COLS = [
+  {key:'flag', label:'', w:'20px', sort:false},
+  {key:'name', label:'Название объекта', cls:'name'},
+  {key:'holder', label:'Правообладатель', cls:'holder'},
+  {key:'regNumber', label:'№ регистрации', cls:'mono num'},
+  {key:'mktuClasses', label:'Классы МКТУ', cls:'mono'},
+  {key:'priorityDate', label:'Приоритет', cls:'mono num'},
+  {key:'expiryDate', label:'Действует до', cls:'mono num'},
+  {key:'_status', label:'Статус'},
+  {key:'responsible', label:'Ответственный'},
+];
+const PT_COLS = [
+  {key:'flag', label:'', w:'20px', sort:false},
+  {key:'name', label:'Название объекта', cls:'name'},
+  {key:'objectType', label:'Вид'},
+  {key:'holder', label:'Правообладатель', cls:'holder'},
+  {key:'regNumber', label:'№ патента', cls:'mono num'},
+  {key:'priorityDate', label:'Приоритет', cls:'mono num'},
+  {key:'expiryDate', label:'Действует до', cls:'mono num'},
+  {key:'_status', label:'Статус'},
+  {key:'responsible', label:'Ответственный'},
+];
+const STATUS_RANK = {expired:0, expiring:1, active:2, none:3};
+
+function applyView(list){
+  let rows = list.slice();
+  const q = state.ui.q.trim().toLowerCase();
+  if(q) rows = rows.filter(it => [it.name,it.holder,it.regNumber,it.appNumber,it.mktuClasses]
+      .some(v => v && String(v).toLowerCase().includes(q)));
+  if(state.ui.status) rows = rows.filter(it => it.status.key===state.ui.status);
+  if(state.ui.resp==='_none') rows = rows.filter(it => !it.responsible);
+  else if(state.ui.resp) rows = rows.filter(it => it.responsible===state.ui.resp);
+  if(state.ui.flag==='1') rows = rows.filter(it => it.flagged);
+  const {key,dir} = state.ui.sort;
+  rows.sort((a,b)=>{
+    let x,y;
+    if(key==='_status'){ x=STATUS_RANK[a.status.key]; y=STATUS_RANK[b.status.key]; }
+    else if(key==='flag'){ x=a.flagged?1:0; y=b.flagged?1:0; }
+    else if(key==='responsible'){ x=userName(a.responsible)||'я'; y=userName(b.responsible)||'я'; }
+    else { x=a[key]; y=b[key]; }
+    x = x==null?'':x; y = y==null?'':y;
+    if(typeof x==='string') x=x.toLowerCase();
+    if(typeof y==='string') y=y.toLowerCase();
+    return x<y?-dir : x>y?dir : 0;
+  });
+  return rows;
+}
+
+function rowHtml(it, cols){
+  const scheduled = it.reminder && !it.reminder.acknowledged && !it.flagged;
+  const cell = c=>{
+    if(c.key==='flag'){
+      if(it.flagged) return `<td title="Сработало напоминание о продлении">🔔</td>`;
+      if(scheduled) return `<td class="bell-clock" title="Напоминание на ${fmt(it.reminder.date)}">◷</td>`;
+      return '<td></td>';
+    }
+    if(c.key==='_status') return `<td><span class="tag ${it.status.key}"><span class="pip"></span>${esc(it.status.label)}</span></td>`;
+    if(c.key==='objectType') return `<td><span class="otype" title="${OTYPE[it.objectType]||''}">${esc(it.objectType||'—')}</span></td>`;
+    if(c.key==='responsible'){
+      const n = userName(it.responsible);
+      return `<td><span class="respcell">${n?`<span class="avatar sm">${esc(userInit(it.responsible))}</span>${esc(firstName(n))}`:`<span class="avatar sm dim">—</span><span style="color:var(--ink-3)">не назначен</span>`}</span></td>`;
+    }
+    if(c.key==='priorityDate'||c.key==='expiryDate') return `<td class="${c.cls||''}">${fmt(it[c.key])}</td>`;
+    return `<td class="${c.cls||''}">${esc(it[c.key]||'—')}</td>`;
+  };
+  return `<tr data-id="${it.id}" class="${it.flagged?'flag':''}">${cols.map(cell).join('')}</tr>`;
+}
+
+function renderRegistry(){
+  const type = ROUTES[state.route].type;
+  const cols = type==='patent' ? PT_COLS : TM_COLS;
+  const list = state.objects[type];
+  if(!list){ $('#view').innerHTML = '<div class="pageloader">Загрузка…</div>'; return; }
+  const rows = applyView(list);
+  const respOpts = ['<option value="">Ответственный: все</option>','<option value="_none">— не назначен</option>',
+    ...state.users.map(u=>`<option value="${u.id}">${esc(u.name)}</option>`)].join('');
+
+  $('#view').innerHTML = `
+    <div class="toolbar">
+      <div class="chipfilter">Статус
+        <select id="f-status">
+          <option value="">все</option>
+          <option value="active">действует</option>
+          <option value="expiring">истекает</option>
+          <option value="expired">истёк</option>
+          <option value="none">без срока</option>
+        </select>
+      </div>
+      <div class="chipfilter"><select id="f-resp">${respOpts}</select></div>
+      <div class="seg" role="group" aria-label="Требуют внимания">
+        <button data-flag="" aria-pressed="${state.ui.flag===''}">Все</button>
+        <button data-flag="1" aria-pressed="${state.ui.flag==='1'}">Требуют внимания</button>
+      </div>
+      <span class="spacer"></span>
+      <span class="count-note">${rows.length} из ${list.length}</span>
+      <button class="btn" id="exportbtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        Выгрузить .csv
+      </button>
+      <button class="btn primary" id="addbtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Добавить объект
+      </button>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>${cols.map(c=>`<th class="${c.sort===false?'':'sortable'}" data-key="${c.key}" ${c.w?`style="width:${c.w}"`:''}>${c.label}${state.ui.sort.key===c.key?` <span class="arw">${state.ui.sort.dir>0?'▲':'▼'}</span>`:''}</th>`).join('')}</tr></thead>
+        <tbody>${rows.length ? rows.map(it=>rowHtml(it,cols)).join('')
+          : `<tr><td colspan="${cols.length}"><div class="empty"><h3>Ничего не найдено</h3>Измените фильтры или запрос.</div></td></tr>`}</tbody>
+      </table>
+    </div>`;
+
+  const sc=$('#f-status'); sc.value=state.ui.status; sc.onchange=e=>{state.ui.status=e.target.value; renderRegistry();};
+  const rc=$('#f-resp'); rc.value=state.ui.resp; rc.onchange=e=>{state.ui.resp=e.target.value; renderRegistry();};
+  document.querySelectorAll('.seg [data-flag]').forEach(b=> b.onclick=()=>{state.ui.flag=b.dataset.flag; renderRegistry();});
+  document.querySelectorAll('th.sortable').forEach(th=> th.onclick=()=>{
+    const k=th.dataset.key;
+    state.ui.sort = state.ui.sort.key===k ? {key:k,dir:-state.ui.sort.dir} : {key:k,dir:1};
+    renderRegistry();
+  });
+  document.querySelectorAll('tbody tr[data-id]').forEach(tr=> tr.onclick=()=> openDetail(tr.dataset.id));
+  $('#addbtn').onclick = ()=> openCreate(type);
+  $('#exportbtn').onclick = ()=> { window.open('/api/export?type='+type, '_blank'); };
+}
+
+/* ---------- detail / edit panel ---------- */
+function openDetail(id){
+  state.panel = {mode:'view', id, obj:null, activity:[], draft:null, busy:false};
+  renderPanel();
+  api('/objects/'+id).then(d=>{
+    if(!state.panel || state.panel.id!==id) return;
+    state.panel.obj = d.object; state.panel.activity = d.activity||[];
+    renderPanel();
+  }).catch(e=> toast(e.message, true));
+}
+function openCreate(type){
+  state.panel = {mode:'create', id:null, type, draft:blankDraft(type), busy:false};
+  renderPanel();
+}
+function blankDraft(type){
+  const b = {holder:'', name:'', appNumber:'', priorityDate:'', expiryDate:'', responsible:state.me.id, notes:'', documentRef:''};
+  return type==='patent' ? {...b, objectType:'ИЗ', regNumber:''} : {...b, regNumber:'', mktuClasses:''};
+}
+function closePanel(){
+  state.panel = null;
+  $('#scrim').classList.remove('open');
+  const p=$('#panel'); p.classList.remove('open'); p.setAttribute('aria-hidden','true');
+}
+function maybeDiscard(){ if(confirm('Закрыть без сохранения изменений?')) closePanel(); }
+
+function recommendedDate(o){
+  if(!o.expiryDate) return new Date(Date.now()+DAY).toISOString().slice(0,10);
+  const rec = new Date(new Date(o.expiryDate+'T00:00:00').getTime() - 183*DAY);
+  return rec < new Date() ? new Date(Date.now()+DAY).toISOString().slice(0,10) : rec.toISOString().slice(0,10);
+}
+
+function renderPanel(){
+  const p=$('#panel'), sc=$('#scrim');
+  const ps = state.panel;
+  if(!ps){ closePanel(); return; }
+  sc.classList.add('open'); p.classList.add('open'); p.setAttribute('aria-hidden','false');
+  sc.onclick = ()=> ps.mode==='view' ? closePanel() : maybeDiscard();
+
+  const editing = ps.mode!=='view';
+  const type = ps.mode==='create' ? ps.type : (ps.obj?ps.obj.type:'trademark');
+  const isPt = type==='patent';
+  const src = editing ? ps.draft : ps.obj;
+
+  if(!src){ p.innerHTML = `<header><div><div class="eyebrow">Объект</div><h2>Загрузка…</h2></div><button class="close" id="pclose">✕</button></header><div class="body"></div>`; p.querySelector('#pclose').onclick=closePanel; return; }
+
+  const st = ps.mode!=='create' && ps.obj ? ps.obj.status : null;
+  const f = (label,key,opts={})=>{
+    const v = src[key]||'';
+    if(!editing) return `<div class="field"><label>${label}</label><div class="val ${opts.mono?'mono':''}">${opts.fmt?fmt(v):(esc(v)||'—')}</div></div>`;
+    if(opts.type==='textarea') return `<div class="field"><label>${label}</label><textarea data-k="${key}">${esc(v)}</textarea></div>`;
+    if(opts.type==='select') return `<div class="field"><label>${label}</label><select data-k="${key}">${opts.options.map(o=>`<option value="${o[0]}" ${v===o[0]?'selected':''}>${esc(o[1])}</option>`).join('')}</select></div>`;
+    return `<div class="field"><label>${label}</label><input data-k="${key}" type="${opts.type||'text'}" value="${esc(v)}" placeholder="${opts.ph||''}"/></div>`;
+  };
+
+  const respField = editing
+    ? `<div class="field"><label>Ответственный сотрудник</label><select data-k="responsible"><option value="">— не назначен</option>${state.users.map(u=>`<option value="${u.id}" ${src.responsible===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select><div class="hint">Письмо о продлении придёт на: ${esc(state.byId[src.responsible]?.email || '—')}</div></div>`
+    : (()=>{ const u=state.byId[src.responsible]; return `<div class="field"><label>Ответственный сотрудник</label><div class="val">${u?`${esc(u.name)} · <span class="mono">${esc(u.email)}</span>`:'не назначен'}</div></div>`; })();
+
+  const docField = `<div class="field disabledwrap"><label>Документ (свидетельство / патент)</label><div class="val">${esc(src.documentRef)||'—'}</div><div class="hint">Загрузка PDF и ссылки на облако появятся позже — поле уже предусмотрено.</div></div>`;
+
+  let reminderHtml = '';
+  if(ps.mode!=='create' && ps.obj){
+    const o = ps.obj, rem = o.reminder, due = o.flagged;
+    if(!rem || rem.acknowledged){
+      const auto = st && (st.key==='expiring'||st.key==='expired');
+      reminderHtml = `<div class="reminderbox"><div class="rb-head">🔔 Напоминание о продлении</div><div class="rb-body">
+        ${rem&&rem.acknowledged?`<div class="hint" style="margin-bottom:10px">Предыдущее напоминание (${fmt(rem.date)}) закрыто — «всё в порядке».</div>`:''}
+        ${auto?`<div class="hint warn" style="margin-bottom:10px">Срок подходит. Рекомендуем напоминание на ${fmt(recommendedDate(o))}.</div>`:''}
+        <div class="grid2">
+          <div><label>Дата</label><input type="date" id="rem-date" value="${auto?recommendedDate(o):''}"/></div>
+          <div><label>Время</label><input type="time" id="rem-time" value="10:00"/></div>
+        </div>
+        <div style="margin-top:10px"><label>Комментарий</label><input type="text" id="rem-note" placeholder="Напр.: оплатить пошлину, связаться с правообладателем"/></div>
+        <button class="btn primary" style="margin-top:12px" id="rem-set">Задать напоминание о продлении</button>
+        <div class="hint" style="margin-top:8px">В назначенный момент объект загорится жёлтым у всех сотрудников, а ответственному уйдёт письмо.</div>
+      </div></div>`;
+    } else {
+      reminderHtml = `<div class="reminderbox ${due?'due':''}"><div class="rb-head">${due?'🔔 Сработало напоминание о продлении':'◷ Напоминание запланировано'}</div><div class="rb-body">
+        <div class="field" style="border:0;padding:0 0 8px"><label>Когда</label><div class="val mono">${fmt(rem.date)} · ${esc(rem.time)}</div></div>
+        ${rem.note?`<div class="field" style="border:0;padding:0 0 8px"><label>Комментарий</label><div class="val">${esc(rem.note)}</div></div>`:''}
+        <div class="field" style="border:0;padding:0 0 10px"><label>Поставил</label><div class="val">${esc(userName(rem.createdBy)||'—')}</div></div>
+        <div style="display:flex;gap:9px;flex-wrap:wrap">
+          <button class="btn primary" id="rem-ok">✓ Всё в порядке</button>
+          <button class="btn" id="rem-del">Снять напоминание</button>
+        </div>
+        <div class="hint" style="margin-top:8px">«Всё в порядке» снимет жёлтую подсветку у всех.</div>
+      </div></div>`;
+    }
+  } else {
+    reminderHtml = `<div class="hint" style="margin:14px 0">Напоминание можно задать после сохранения объекта.</div>`;
+  }
+
+  const actList = (ps.activity && ps.activity.length)
+    ? `<div class="listcard" style="margin-top:6px">${ps.activity.slice(0,8).map(e=>`<div class="lrow" style="padding:9px 12px"><div class="lr-main"><div class="lr-t" style="font-size:13px;font-weight:400">${esc(e.text)}</div><div class="lr-s">${esc(userName(e.userId)||'Система')}</div></div><div class="when">${fmtDT(e.at)}</div></div>`).join('')}</div>`
+    : `<div class="hint">Пока нет записей.</div>`;
+
+  p.innerHTML = `
+    <header>
+      <div>
+        <div class="eyebrow">${isPt?'Патент':'Товарный знак'}${st?` · <span style="color:var(--${st.key==='active'?'ok':st.key==='expired'?'crit':'warn'})">${esc(st.label)}</span>`:''}</div>
+        <h2>${ps.mode==='create' ? 'Новый объект' : esc(src.name||'Без названия')}</h2>
+      </div>
+      <button class="close" id="pclose" aria-label="Закрыть">✕</button>
+    </header>
+    <div class="body">
+      ${f('Название объекта','name')}
+      ${f('Правообладатель','holder')}
+      ${isPt ? f('Вид объекта','objectType',{type:'select',options:Object.entries(OTYPE).map(([k,v])=>[k,`${k} — ${v}`])}) : ''}
+      ${f('№ заявки','appNumber',{mono:true})}
+      ${f(isPt?'№ патента':'№ регистрации','regNumber',{mono:true})}
+      ${!isPt ? f('Классы МКТУ','mktuClasses',{mono:true,ph:'напр. 9, 35, 42'}) : ''}
+      <div class="grid2">
+        ${f('Дата приоритета','priorityDate',{type:'date',mono:true,fmt:true})}
+        ${f('Действует до','expiryDate',{type:'date',mono:true,fmt:true})}
+      </div>
+      ${respField}
+      ${f('Примечание','notes',{type:'textarea'})}
+      ${docField}
+      ${editing ? '' : reminderHtml}
+      ${editing ? '' : `<div class="field"><label>История по объекту</label>${actList}</div>`}
+    </div>
+    <div class="actions">
+      ${ps.mode==='view' ? `
+        <button class="btn primary" id="pedit">Редактировать</button>
+        <button class="btn danger" id="pdel">Удалить</button>
+        <span class="spacer"></span>
+        <button class="btn" id="pclose2">Закрыть</button>` : `
+        <button class="btn primary" id="psave" ${ps.busy?'disabled':''}>${ps.mode==='create'?'Создать объект':'Сохранить'}</button>
+        <button class="btn" id="pcancel">Отмена</button>`}
+    </div>`;
+
+  p.querySelector('#pclose').onclick = ()=> editing ? maybeDiscard() : closePanel();
+  const q = sel => p.querySelector(sel);
+  if(q('#pclose2')) q('#pclose2').onclick = closePanel;
+  if(q('#pedit')) q('#pedit').onclick = ()=>{ ps.mode='edit'; ps.draft = draftFrom(ps.obj); renderPanel(); };
+  if(q('#pdel')) q('#pdel').onclick = ()=> deleteObject(ps.obj);
+  if(q('#pcancel')) q('#pcancel').onclick = maybeDiscard;
+  if(q('#psave')) q('#psave').onclick = savePanel;
+  p.querySelectorAll('[data-k]').forEach(el=> el.oninput = ()=>{ ps.draft[el.dataset.k] = el.value; });
+  if(q('#rem-set')) q('#rem-set').onclick = ()=>{
+    const date=q('#rem-date').value, time=q('#rem-time').value||'10:00', note=q('#rem-note').value.trim();
+    if(!date){ toast('Укажите дату напоминания', true); return; }
+    doReminder('POST', ps.obj.id, {date,time,note});
+  };
+  if(q('#rem-ok')) q('#rem-ok').onclick = ()=> doReminder('POST', ps.obj.id+'/reminder/ack');
+  if(q('#rem-del')) q('#rem-del').onclick = ()=> doReminder('DELETE', ps.obj.id);
+}
+function draftFrom(o){
+  const d = {holder:o.holder,name:o.name,appNumber:o.appNumber,regNumber:o.regNumber,priorityDate:o.priorityDate||'',expiryDate:o.expiryDate||'',responsible:o.responsible||'',notes:o.notes||'',documentRef:o.documentRef||''};
+  if(o.type==='patent') d.objectType = o.objectType||'ИЗ';
+  else d.mktuClasses = o.mktuClasses||'';
+  return d;
+}
+
+async function savePanel(){
+  const ps = state.panel;
+  const d = ps.draft;
+  if(!String(d.name||'').trim() || !String(d.holder||'').trim()){ toast('Заполните название и правообладателя', true); return; }
+  ps.busy = true; renderPanel();
+  try{
+    if(ps.mode==='create'){
+      const res = await api('/objects', {method:'POST', body:jbody({type:ps.type, ...d})});
+      toast('Объект создан');
+      await refresh();
+      openDetail(res.object.id);
+      return;
+    } else {
+      const res = await api('/objects/'+ps.id, {method:'PATCH', body:jbody(d)});
+      toast(res.unchanged ? 'Изменений нет' : 'Сохранено');
+      ps.mode='view'; ps.obj=res.object;
+      const det = await api('/objects/'+ps.id);
+      ps.activity = det.activity||[];
+      await refresh(); renderPanel();
+    }
+  }catch(e){ toast(e.message, true); ps.busy=false; renderPanel(); }
+}
+async function deleteObject(o){
+  if(!confirm(`Удалить «${o.name}»? Объект попадёт в корзину.`)) return;
+  try{
+    await api('/objects/'+o.id, {method:'DELETE'});
+    toast('Перемещено в корзину');
+    closePanel(); await refresh();
+  }catch(e){ toast(e.message, true); }
+}
+async function doReminder(method, pathTail, body){
+  try{
+    const path = '/objects/'+pathTail + (pathTail.includes('/reminder') ? '' : '/reminder');
+    const res = await api(path, {method, body: body?jbody(body):undefined});
+    if(state.panel){ state.panel.obj = res.object;
+      const det = await api('/objects/'+state.panel.id); state.panel.activity = det.activity||[];
+    }
+    toast(method==='DELETE' ? 'Напоминание снято' : (pathTail.includes('ack') ? 'Готово. Подсветка снята у всех' : (reminderDue(res.object.reminder) ? 'Напоминание активно — объект подсвечен' : 'Напоминание запланировано')));
+    await refresh(); renderPanel();
+  }catch(e){ toast(e.message, true); }
+}
+
+/* ---------- reminders / trash / log ---------- */
+function renderReminders(){
+  const items = state.reminders;
+  if(!items){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
+  const withDue = items.map(it=>({it, due:reminderDue(it.reminder)}));
+  const due = withDue.filter(x=>x.due), planned = withDue.filter(x=>!x.due);
+  const block = (title,arr)=> !arr.length ? '' : `
+    <h3 style="font-size:14px;margin:18px 0 8px;color:var(--ink-2)">${title} · ${arr.length}</h3>
+    <div class="listcard">${arr.map(({it,due})=>`
+      <div class="lrow ${due?'due':''}" data-id="${it.id}" style="cursor:pointer">
+        <div class="avatar sm ${it.responsible?'':'dim'}">${esc(userInit(it.responsible)||'—')}</div>
+        <div class="lr-main">
+          <div class="lr-t">${esc(it.name)} <span style="color:var(--ink-3);font-weight:400">· ${esc(it.holder)}</span></div>
+          <div class="lr-s">${it.reminder.note?esc(it.reminder.note)+' · ':''}ответственный: ${esc(userName(it.responsible)||'не назначен')} · поставил ${esc(userName(it.reminder.createdBy)||'—')}</div>
+        </div>
+        <div class="tag ${it.status.key}"><span class="pip"></span>${esc(it.status.label)}</div>
+        <div class="when">${fmt(it.reminder.date)} ${esc(it.reminder.time||'')}</div>
+      </div>`).join('')}</div>`;
+  $('#view').innerHTML = `
+    <div class="demoline">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+      Сработавшие напоминания подсвечивают объект жёлтым у всех сотрудников. Снять — кнопкой «Всё в порядке» в карточке объекта.
+    </div>
+    ${items.length ? block('Активные — требуют действия', due)+block('Запланированы', planned)
+      : `<div class="listcard"><div class="empty"><h3>Активных напоминаний нет</h3>Задайте напоминание в карточке объекта.</div></div>`}`;
+  document.querySelectorAll('.lrow[data-id]').forEach(r=> r.onclick=()=> openDetail(r.dataset.id));
+}
+
+function renderTrash(){
+  const t = state.trash;
+  if(!t){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
+  $('#view').innerHTML = t.length ? `
+    <div class="demoline">Удалённые объекты хранятся здесь до восстановления или окончательного удаления.</div>
+    <div class="listcard">${t.map(o=>`
+      <div class="lrow">
+        <div class="lr-main">
+          <div class="lr-t">${esc(o.name)} <span style="color:var(--ink-3);font-weight:400">· ${o.type==='patent'?'патент':'товарный знак'} · ${esc(o.holder)}</span></div>
+          <div class="lr-s">Удалил ${esc(userName(o.deletedBy)||'—')} · ${fmtDT(o.deletedAt)}</div>
+        </div>
+        <button class="btn" data-restore="${o.id}">Восстановить</button>
+        <button class="btn danger" data-purge="${o.id}">Удалить навсегда</button>
+      </div>`).join('')}</div>`
+    : `<div class="listcard"><div class="empty"><h3>Корзина пуста</h3></div></div>`;
+  document.querySelectorAll('[data-restore]').forEach(b=> b.onclick=async()=>{
+    try{ await api('/trash/'+b.dataset.restore+'/restore',{method:'POST'}); toast('Восстановлено'); await refresh(); }catch(e){ toast(e.message,true); }
+  });
+  document.querySelectorAll('[data-purge]').forEach(b=> b.onclick=async()=>{
+    if(!confirm('Удалить навсегда? Действие необратимо.')) return;
+    try{ await api('/trash/'+b.dataset.purge,{method:'DELETE'}); toast('Удалено навсегда'); await refresh(); }catch(e){ toast(e.message,true); }
+  });
+}
+
+function renderLog(){
+  const rows = state.activity;
+  if(!rows){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
+  const icon = {import:'⭳',create:'＋',edit:'✎',delete:'🗑',restore:'↺',purge:'✖',reminder_set:'🔔',reminder_ok:'✓',reminder_del:'⊘',login:'→',password:'🔑'};
+  $('#view').innerHTML = `
+    <div class="demoline">Полный журнал действий всех сотрудников с точным временем.</div>
+    <div class="listcard">${rows.map(e=>`
+      <div class="lrow">
+        <div class="avatar sm ${e.userId?'':'dim'}">${esc(userInit(e.userId) || '⚙')}</div>
+        <div class="lr-main"><div class="lr-t" style="font-weight:400">${icon[e.kind]||'·'} ${esc(e.text)}</div>
+          <div class="lr-s">${esc(userName(e.userId)||'Система')}</div></div>
+        <div class="when">${fmtDT(e.at)}</div>
+      </div>`).join('')}</div>`;
+}
+
+/* ---------- bell ---------- */
+function renderBell(){
+  const reminders = state.reminders || [];
+  const due = reminders.filter(x=>reminderDue(x.reminder));
+  const n = (state.health && state.health.remindersDue!=null) ? state.health.remindersDue : due.length;
+  const dot = $('#belldot');
+  if(n){ dot.hidden=false; dot.textContent=n; } else dot.hidden=true;
+  const menu = $('#bellmenu');
+  if(!state.bellOpen){ menu.innerHTML=''; return; }
+  menu.innerHTML = `<div class="bellmenu"><h4>Напоминания о продлении</h4>
+    ${due.length ? due.map(it=>`
+      <div class="bellitem" data-id="${it.id}" style="cursor:pointer">
+        <span style="font-size:15px">🔔</span>
+        <div><div class="ib-t">${esc(it.name)}</div><div class="ib-m">${it.reminder.note?esc(it.reminder.note):'Срок продления'} · ${esc(userName(it.responsible)||'ответственный не назначен')}</div></div>
+      </div>`).join('') : `<div class="bellitem"><div class="ib-m">Активных напоминаний нет.</div></div>`}
+    <div class="bellitem" style="cursor:pointer" data-all="1"><div class="ib-t" style="color:var(--accent)">Открыть все напоминания →</div></div></div>`;
+  menu.querySelectorAll('[data-id]').forEach(el=> el.onclick=()=>{ state.bellOpen=false; renderBell(); openDetail(el.dataset.id); });
+  menu.querySelector('[data-all]').onclick = ()=>{ state.bellOpen=false; renderBell(); go('reminders'); };
+}
+
+/* ---------- top render ---------- */
+function renderAll(){
+  const r = ROUTES[state.route] || ROUTES.trademarks;
+  $('#pagetitle').textContent = r.title;
+  $('#crumb').textContent = r.crumb;
+  renderNav();
+  renderBell();
+  if(state.route==='trademarks'||state.route==='patents') renderRegistry();
+  else if(state.route==='reminders') renderReminders();
+  else if(state.route==='trash') renderTrash();
+  else if(state.route==='log') renderLog();
+}
+
+/* ---------- theme ---------- */
+function applyTheme(){
+  try{ state.theme = localStorage.getItem('erfis_theme'); }catch(e){}
+  if(state.theme) document.documentElement.setAttribute('data-theme', state.theme);
+  else document.documentElement.removeAttribute('data-theme');
+}
+function toggleTheme(){
+  const cur = state.theme || (matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+  state.theme = cur==='dark'?'light':'dark';
+  try{ localStorage.setItem('erfis_theme', state.theme); }catch(e){}
+  applyTheme();
+}
+
+/* ---------- auth screens ---------- */
+function showLogin(){
+  $('#app').hidden = true; $('#pwchange').hidden = true; $('#login').hidden = false;
+  $('#li-email').focus();
+}
+function showPwChange(){
+  $('#app').hidden = true; $('#login').hidden = true; $('#pwchange').hidden = false;
+}
+async function startApp(session){
+  state.me = session.user;
+  state.users = session.users;
+  state.byId = {};
+  state.users.forEach(u=> state.byId[u.id] = {...u, init:u.initials});
+  $('#login').hidden = true; $('#pwchange').hidden = true; $('#app').hidden = false;
+  $('#meavatar').textContent = state.byId[state.me.id]?.init || '—';
+  $('#mename').textContent = state.me.name;
+  const r = location.hash.replace('#/','');
+  state.route = ROUTES[r] ? r : 'trademarks';
+  await refresh();
+}
+
+async function boot(){
+  applyTheme();
+  try{
+    const s = await api('/session');
+    if(s.user.mustChange){ window.__session = s; showPwChange(); return; }
+    await startApp(s);
+  }catch(e){
+    showLogin();
+  }
+}
+
+/* ---------- events ---------- */
+$('#loginform').addEventListener('submit', async e=>{
+  e.preventDefault();
+  $('#li-err').textContent = '';
+  const btn = e.target.querySelector('.submit'); btn.disabled = true;
+  try{
+    const res = await api('/login', {method:'POST', body:jbody({email:$('#li-email').value.trim(), password:$('#li-pass').value})});
+    if(res.user.mustChange){
+      const s = await api('/session'); window.__session = s; showPwChange();
+    } else {
+      const s = await api('/session'); await startApp(s);
+    }
+  }catch(err){ $('#li-err').textContent = err.message; }
+  finally{ btn.disabled = false; }
+});
+
+$('#pwform').addEventListener('submit', async e=>{
+  e.preventDefault();
+  $('#pw-err').textContent = '';
+  const btn = e.target.querySelector('.submit'); btn.disabled = true;
+  try{
+    await api('/password', {method:'POST', body:jbody({current:$('#pw-cur').value, next:$('#pw-new').value})});
+    const s = await api('/session');
+    toast('Пароль сохранён');
+    await startApp(s);
+  }catch(err){ $('#pw-err').textContent = err.message; }
+  finally{ btn.disabled = false; }
+});
+
+$('#logoutbtn').onclick = async ()=>{
+  try{ await api('/logout', {method:'POST'}); }catch(e){}
+  location.hash = ''; showLogin();
+};
+$('#themebtn').onclick = toggleTheme;
+$('#bellbtn').onclick = e=>{ e.stopPropagation(); state.bellOpen = !state.bellOpen; renderBell(); };
+document.addEventListener('click', e=>{
+  if(state.bellOpen && !e.target.closest('#bellmenu') && !e.target.closest('#bellbtn')){ state.bellOpen=false; renderBell(); }
+});
+$('#search').addEventListener('input', e=>{
+  state.ui.q = e.target.value;
+  if(state.route==='trademarks'||state.route==='patents') renderRegistry();
+});
+$('#menutoggle').onclick = ()=> $('#side').classList.toggle('open');
+$('#nav').addEventListener('click', e=>{
+  const a = e.target.closest('a[data-r]'); if(!a) return;
+  e.preventDefault(); $('#side').classList.remove('open'); go(a.dataset.r);
+});
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){
+    if(state.panel){ state.panel.mode==='view' ? closePanel() : maybeDiscard(); }
+    else if(state.bellOpen){ state.bellOpen=false; renderBell(); }
+  }
+});
+
+// периодическое обновление (мультипользовательский режим)
+setInterval(()=>{
+  if($('#app').hidden) return;
+  if(state.panel && state.panel.mode!=='view') return;
+  refresh().catch(()=>{});
+}, 30000);
+
+boot();
+</script>
+</body>
+</html>

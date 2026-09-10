@@ -1,0 +1,17 @@
+[Unit]
+Description=cloudflared — туннель для ЭРФИС Портала (quick tunnel, v1)
+After=network-online.target erfis-portal.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate --url http://localhost:8080 --edge-ip-version auto
+ExecStartPost=/bin/bash -c 'for i in $(seq 1 40); do sleep 2; u=$(journalctl -u erfis-cloudflared -n 120 --no-pager 2>/dev/null | grep -oE "https://[a-z0-9-]+\\.trycloudflare\\.com" | tail -1); if [ -n "$u" ]; then echo "$u" > /var/lib/erfis-portal/tunnel-url; break; fi; done'
+Restart=always
+RestartSec=5
+User=erfis
+Group=erfis
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+[Unit]
+Description=ЭРФИС Портал — реестр объектов
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=erfis
+Group=erfis
+WorkingDirectory=/opt/erfis-portal/server
+EnvironmentFile=/var/lib/erfis-portal/env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/erfis-portal /opt/erfis-portal
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
