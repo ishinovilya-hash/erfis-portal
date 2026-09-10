@@ -60,6 +60,20 @@ CREATE TABLE IF NOT EXISTS activity (
 );
 CREATE INDEX IF NOT EXISTS idx_activity_object ON activity(object_id);
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS mood_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  mood INTEGER,
+  workload TEXT NOT NULL DEFAULT 'ok',
+  worked INTEGER NOT NULL DEFAULT 1,
+  note TEXT NOT NULL DEFAULT '',
+  factors TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(user_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_mood_date ON mood_entries(date);
 `);
 
 // ---------- password helpers (scrypt, no native deps) ----------

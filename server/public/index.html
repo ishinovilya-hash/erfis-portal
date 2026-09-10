@@ -192,6 +192,52 @@ td.num{white-space:nowrap}
 .lrow.due{background:var(--flag-bg);box-shadow:inset 3px 0 0 var(--flag-edge)}
 .when{font-size:12px;color:var(--ink-3);white-space:nowrap;font-family:"IBM Plex Mono",monospace}
 
+/* ---------- трекер настроения ---------- */
+.moodgrid{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
+@media (max-width:1040px){.moodgrid{grid-template-columns:1fr}}
+.checkin{border:1px solid var(--hairline);border-radius:var(--r);background:var(--surface);padding:20px;box-shadow:var(--shadow-sm)}
+.checkin h3{font-size:17px}
+.checkin.done{padding:16px 18px}
+.checkin .fl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:7px}
+.moodrow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.moodbtn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:12px 6px;
+  border:1px solid var(--hairline);border-radius:10px;background:var(--surface-2)}
+.moodbtn:hover{border-color:var(--ink-3)}
+.moodbtn.sel{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.moodbtn .me{font-size:23px;line-height:1}
+.moodbtn .ml{font-size:11px;color:var(--ink-2);font-weight:500;text-align:center}
+.moodbtn:disabled{opacity:.4}
+.seg.wl{display:flex}
+.seg.wl button{flex:1}
+@media (max-width:560px){
+  .checkin{padding:15px}
+  .moodrow{gap:5px}
+  .moodbtn{padding:9px 3px}
+  .moodbtn .me{font-size:19px}
+  .moodbtn .ml{font-size:9.5px}
+  .seg.wl button{padding:7px 3px;font-size:12px}
+}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{padding:5px 11px;border:1px solid var(--hairline);border-radius:20px;background:var(--surface-2);font-size:12.5px;color:var(--ink-2)}
+.chip:hover{border-color:var(--ink-3)}
+.chip.sel{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);font-weight:500}
+.checkin textarea{width:100%;padding:9px 11px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface-2);resize:vertical}
+.checkin-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}
+.tavatar{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:10px;font-weight:600;border:2px solid var(--surface)}
+.tavatar.sm{width:24px;height:24px;flex:0 0 auto;border-width:0}
+.tavatar.ndone{background:var(--hairline);color:var(--ink-3)}
+.mrow{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--hairline-2);flex-wrap:wrap}
+.mrow:last-child{border-bottom:0}
+.spark{flex:1;min-width:110px;display:flex;justify-content:flex-end}
+.avg7{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:13px;width:34px;text-align:right}
+.mflag{font-size:11.5px;color:var(--warn);background:var(--flag-bg);border:1px solid var(--flag-edge);padding:2px 8px;border-radius:20px;white-space:nowrap}
+.dstrip{display:flex;flex-wrap:wrap;gap:3px}
+.dcell{width:12px;height:12px;border-radius:3px;flex:0 0 auto;display:inline-block}
+@media (max-width:560px){
+  .spark{display:none}
+  .mrow>div[style*="min-width:120px"]{min-width:0!important;flex:1}
+}
+
 #login{position:fixed;inset:0;z-index:100;background:var(--brand);color:#EDEEF6;display:grid;place-items:center;padding:24px}
 #login .card{max-width:380px;width:100%;text-align:center}
 #login .login-logo{width:184px;height:auto;color:#EDEEF6;margin:0 auto 18px;display:block}
@@ -367,6 +413,7 @@ const ROUTES = {
   trademarks:{title:'Реестр товарных знаков', crumb:'Реестр объектов', type:'trademark'},
   patents:{title:'Реестр патентов', crumb:'Реестр объектов', type:'patent'},
   reminders:{title:'Напоминания о продлении', crumb:'Контроль сроков'},
+  mood:{title:'Настроение команды', crumb:'Команда'},
   trash:{title:'Корзина', crumb:'Служебное'},
   log:{title:'Журнал изменений', crumb:'Служебное'},
 };
@@ -375,12 +422,14 @@ function go(r){
   state.route = r;
   state.ui.sort = {key:'holder',dir:1};
   state.ui.status=''; state.ui.resp=''; state.ui.flag='';
+  state.moodEditing = false; state.moodForm = null;
   history.replaceState(null,'','#/'+r);
   renderAll();
+  refresh().catch(e=> toast(e.message, true));
 }
 window.addEventListener('hashchange', ()=>{
   const r = location.hash.replace('#/','') || 'trademarks';
-  if(r!==state.route && ROUTES[r]){ state.route=r; renderAll(); }
+  if(r!==state.route && ROUTES[r]){ go(r); }
 });
 
 /* ---------- data loading ---------- */
@@ -391,9 +440,14 @@ async function loadRoute(){
   else if(r==='reminders') state.reminders = (await api('/reminders')).reminders;
   else if(r==='trash') state.trash = (await api('/trash')).trash;
   else if(r==='log') state.activity = (await api('/activity?limit=400')).activity;
+  else if(r==='mood'){
+    const [today, team, mine] = await Promise.all([api('/mood/today'), api('/mood/team?days=30'), api('/mood/mine?days=60')]);
+    state.moodToday = today; state.moodTeam = team; state.moodMine = mine.entries;
+  }
 }
 async function loadCounts(){
   try{ state.health = await api('/health'); }catch(e){}
+  try{ state.moodToday = await api('/mood/today'); }catch(e){}
 }
 async function refresh(){
   await Promise.all([loadRoute(), loadCounts()]);
@@ -410,6 +464,8 @@ function renderNav(){
     {r:'patents', label:'Патенты', count:h.patents, ic:'M12 3l8 4-8 4-8-4 8-4Zm-8 9 8 4 8-4M4 16l8 4 8-4'},
     {sec:'Контроль сроков'},
     {r:'reminders', label:'Напоминания', count:dueTotal||null, flag:!!dueTotal, ic:'M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'},
+    {sec:'Команда'},
+    {r:'mood', label:'Настроение команды', count: (state.moodToday && !state.moodToday.entry) ? '•' : null, flag: !!(state.moodToday && !state.moodToday.entry), ic:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM9 10h.01M15 10h.01M8.5 15a4 4 0 0 0 7 0'},
     {sec:'Служебное'},
     {r:'trash', label:'Корзина', count:h.trash||null, ic:'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13'},
     {r:'log', label:'Журнал изменений', ic:'M8 6h11M8 12h11M8 18h11M3.5 6h.01M3.5 12h.01M3.5 18h.01'},
@@ -777,6 +833,172 @@ function renderReminders(){
   document.querySelectorAll('.lrow[data-id]').forEach(r=> r.onclick=()=> openDetail(r.dataset.id));
 }
 
+/* ---------- трекер настроения ---------- */
+const MOOD_EMOJI = {1:'😔',2:'😕',3:'😐',4:'🙂',5:'😄'};
+const MOOD_LABEL = {1:'Тяжёлый',2:'Трудный',3:'Обычный',4:'Хороший',5:'Отличный'};
+const WORKLOAD_LABEL = {low:'Недогруз', ok:'В норме', high:'Завал'};
+function moodColor(m){ return m==null?'var(--hairline)':['','var(--crit)','var(--warn)','var(--ink-3)','#3E9E73','var(--ok)'][m]; }
+function ruDate(d){ const p=String(d).split('-'); return p.length===3?`${+p[2]}.${p[1]}`:d; }
+
+function moodSparkline(recent){
+  const w=150, h=34, n=recent.length, step=w/(n-1);
+  let path='', dots='';
+  recent.forEach((r,i)=>{
+    const x=i*step;
+    if(r.mood==null){ if(r.worked===false) dots+=`<circle cx="${x.toFixed(1)}" cy="${h-2}" r="1.6" fill="var(--ink-3)" opacity=".4"/>`; return; }
+    const y=(h-4) - ((r.mood-1)/4)*(h-8) + 2;
+    path += (path?'L':'M')+x.toFixed(1)+' '+y.toFixed(1)+' ';
+    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.2" fill="${moodColor(r.mood)}"/>`;
+  });
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="overflow:visible">
+    <path d="${path}" fill="none" stroke="var(--ink-3)" stroke-width="1.4" stroke-linecap="round" opacity=".55"/>${dots}</svg>`;
+}
+
+function moodTeamChart(series){
+  const W=680, H=170, padL=26, padR=12, padT=12, padB=22;
+  const iw=W-padL-padR, ih=H-padT-padB, n=series.length;
+  const x = i => padL + (n<=1?0:i*(iw/(n-1)));
+  const y = v => padT + ih - ((v-1)/4)*ih;
+  const pts = series.map((s,i)=> s.avg==null?null:[x(i), y(s.avg)]);
+  let line='', area='';
+  let started=false, firstX=0, lastX=0;
+  pts.forEach((p,i)=>{ if(!p){ started=false; return; }
+    if(!started){ line+=`M${p[0].toFixed(1)} ${p[1].toFixed(1)} `; if(area==='') firstX=p[0]; started=true; }
+    else line+=`L${p[0].toFixed(1)} ${p[1].toFixed(1)} `;
+    lastX=p[0]; area+=(area?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)+' ';
+  });
+  const areaClosed = area ? area+`L${lastX.toFixed(1)} ${(padT+ih).toFixed(1)} L${firstX.toFixed(1)} ${(padT+ih).toFixed(1)} Z` : '';
+  const grid = [1,2,3,4,5].map(v=>`
+    <line x1="${padL}" y1="${y(v).toFixed(1)}" x2="${W-padR}" y2="${y(v).toFixed(1)}" stroke="var(--hairline)" stroke-width="1" ${v===1?'':'stroke-dasharray="2 3"'}/>
+    <text x="${padL-6}" y="${(y(v)+3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--ink-3)">${v}</text>`).join('');
+  const xlabels = series.map((s,i)=> (i%Math.ceil(n/6)===0 || i===n-1) ? `<text x="${x(i).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9" fill="var(--ink-3)">${ruDate(s.date)}</text>`:'').join('');
+  const last = [...pts].reverse().find(Boolean);
+  const endDot = last ? `<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="3.5" fill="var(--accent)"/>` : '';
+  return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:420px;display:block">
+    ${grid}${xlabels}
+    ${areaClosed?`<path d="${areaClosed}" fill="var(--accent)" opacity=".08"/>`:''}
+    <path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${endDot}
+  </svg></div>`;
+}
+
+function moodForm(){
+  const f = state.moodForm;
+  const off = f.worked===false;
+  const moodBtns = [1,2,3,4,5].map(m=>`
+    <button class="moodbtn ${f.mood===m?'sel':''}" data-mood="${m}" ${off?'disabled':''}>
+      <span class="me">${MOOD_EMOJI[m]}</span><span class="ml">${MOOD_LABEL[m]}</span></button>`).join('');
+  const wlBtns = ['low','ok','high'].map(k=>`<button data-wl="${k}" aria-pressed="${f.workload===k}" ${off?'disabled':''}>${WORKLOAD_LABEL[k]}</button>`).join('');
+  const chips = (state.moodToday.factors||[]).map(x=>`<button class="chip ${f.factors.includes(x)?'sel':''}" data-factor="${esc(x)}" ${off?'disabled':''}>${esc(x)}</button>`).join('');
+  return `<div class="checkin">
+    <h3>Как прошёл рабочий день${state.moodToday?.date?`, ${ruDate(state.moodToday.date)}`:''}?</h3>
+    <p class="hint" style="margin:2px 0 14px">Одна отметка в день. Данные видит команда — это не оценка работы, а забота о том, чтобы никто не перегорал.</p>
+    <div class="moodrow">${moodBtns}</div>
+    <div style="margin-top:16px"><div class="fl">Загрузка сегодня</div><div class="seg wl">${wlBtns}</div></div>
+    <div style="margin-top:16px"><div class="fl">Что повлияло на день? <span style="color:var(--ink-3);font-weight:400">— по желанию</span></div><div class="chips">${chips}</div></div>
+    <div style="margin-top:14px"><div class="fl">Пара слов <span style="color:var(--ink-3);font-weight:400">— по желанию, видит команда</span></div>
+      <textarea id="mood-note" rows="2" placeholder="Например: закрыли крупную заявку; или — завал из-за срочных правок" ${off?'disabled':''}>${esc(f.note||'')}</textarea></div>
+    <div class="checkin-actions">
+      <button class="btn primary" id="mood-save">${off?'Отметить выходной':'Сохранить отметку'}</button>
+      <button class="btn" id="mood-off">${off?'Я всё-таки работал(а)':'Сегодня выходной / не работал(а)'}</button>
+      ${state.moodEditing?`<button class="btn" id="mood-cancel">Отмена</button>`:''}
+    </div>
+  </div>`;
+}
+
+function renderMood(){
+  const t = state.moodTeam, today = state.moodToday, mine = state.moodMine;
+  if(!t || !today){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
+  const entry = today.entry;
+  const editing = state.moodEditing || !entry;
+  if(!state.moodForm) state.moodForm = entry
+    ? {mood:entry.mood, workload:entry.workload, factors:entry.factors.slice(), note:entry.note, worked:entry.worked}
+    : {mood:null, workload:'ok', factors:[], note:'', worked:true};
+
+  const summary = entry ? `<div class="checkin done">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="font-size:32px">${entry.worked?MOOD_EMOJI[entry.mood]:'🌿'}</span>
+        <div><div style="font-weight:600">${entry.worked?`День отмечен как «${MOOD_LABEL[entry.mood]}»`:'Отмечен выходной'}</div>
+        <div class="hint">${entry.worked?`Загрузка: ${WORKLOAD_LABEL[entry.workload]}${entry.factors.length?' · '+entry.factors.join(', '):''}`:'Хорошего отдыха'}</div></div>
+        <button class="btn" id="mood-edit" style="margin-left:auto">Изменить</button>
+      </div>
+    </div>` : '';
+
+  const p = t.participationToday;
+  const memberDot = m => `<span class="tavatar ${m.todayDone?'':'ndone'}" title="${esc(m.name)}${m.todayDone?' — отметился':' — ещё не отметился'}" style="${m.todayDone&&m.today?.worked?`background:${moodColor(m.today.mood)}`:''}">${esc(m.initials)}</span>`;
+
+  const memberRow = m => `<div class="mrow">
+      <span class="tavatar sm" style="${m.today&&m.today.worked?`background:${moodColor(m.today.mood)}`:''}">${esc(m.initials)}</span>
+      <div style="min-width:120px"><div style="font-weight:500">${esc(m.name)}</div>
+        <div class="hint">${m.todayDone?(m.today.worked?MOOD_LABEL[m.today.mood]+' сегодня':'выходной'):'сегодня не отмечался'}</div></div>
+      <div class="spark">${moodSparkline(m.recent)}</div>
+      <div class="avg7" title="средняя за 7 дней">${m.avg7!=null?m.avg7:'—'}</div>
+      ${m.signal.flag?`<div class="mflag" title="${esc(m.signal.reasons.join('; '))}">⚠︎ стоит поговорить</div>`:'<div></div>'}
+    </div>`;
+
+  const myStrip = (mine||[]).slice(-56).map(e=>`<span class="dcell" title="${ruDate(e.date)}${e.worked?': '+MOOD_LABEL[e.mood]:': выходной'}" style="background:${e.worked?moodColor(e.mood):'var(--hairline-2)'}"></span>`).join('');
+
+  $('#view').innerHTML = `
+    <div class="moodgrid">
+      <div>
+        ${editing ? moodForm() : summary}
+        <div class="listcard" style="margin-top:18px">
+          <div style="padding:14px 16px;border-bottom:1px solid var(--hairline-2);display:flex;align-items:center;gap:10px">
+            <strong style="font-family:inherit">Команда</strong>
+            <span class="hint">отметились сегодня: ${p.done} из ${p.total}${t.teamAvg7!=null?` · средняя за неделю ${t.teamAvg7}`:''}</span>
+            <span style="margin-left:auto;display:flex;gap:5px">${t.members.map(memberDot).join('')}</span>
+          </div>
+          <div style="padding:14px 16px 6px">${moodTeamChart(t.series)}</div>
+          <div style="padding:4px 16px 8px">${t.members.map(memberRow).join('')}</div>
+        </div>
+      </div>
+      <div>
+        <div class="listcard" style="padding:14px 16px">
+          <strong style="font-family:inherit">Ваши отметки</strong>
+          <div class="hint" style="margin:3px 0 10px">последние 8 недель</div>
+          <div class="dstrip">${myStrip||'<span class="hint">пока нет отметок</span>'}</div>
+          <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+            ${[1,2,3,4,5].map(m=>`<span class="hint" style="display:flex;align-items:center;gap:4px"><span class="dcell" style="background:${moodColor(m)}"></span>${MOOD_LABEL[m]}</span>`).join('')}
+          </div>
+        </div>
+        <button class="btn" id="mood-export" style="margin-top:12px;width:100%">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          Выгрузить всё в .csv
+        </button>
+        <div class="hint" style="margin-top:14px;line-height:1.5">
+          Что смотреть при оценке выгорания: устойчивый спад средней, «завал» несколько дней подряд,
+          серия тяжёлых дней у одного человека, повторяющиеся факторы (переработки, сжатые сроки).
+          Флаг «стоит поговорить» ставится автоматически по этим признакам.
+        </div>
+      </div>
+    </div>`;
+
+  const q = s=>$('#view '+s);
+  if(q('#mood-edit')) q('#mood-edit').onclick = ()=>{ state.moodEditing=true; renderMood(); };
+  if(q('#mood-cancel')) q('#mood-cancel').onclick = ()=>{ state.moodEditing=false; state.moodForm=null; renderMood(); };
+  if(q('#mood-export')) q('#mood-export').onclick = ()=> window.open('/api/mood/export','_blank');
+  document.querySelectorAll('#view [data-mood]').forEach(b=> b.onclick=()=>{ state.moodForm.mood=+b.dataset.mood; renderMood(); });
+  document.querySelectorAll('#view [data-wl]').forEach(b=> b.onclick=()=>{ state.moodForm.workload=b.dataset.wl; renderMood(); });
+  document.querySelectorAll('#view [data-factor]').forEach(b=> b.onclick=()=>{
+    const f=b.dataset.factor, a=state.moodForm.factors, i=a.indexOf(f);
+    if(i<0) a.push(f); else a.splice(i,1); renderMood();
+  });
+  if(q('#mood-note')) q('#mood-note').oninput = e=>{ state.moodForm.note=e.target.value; };
+  if(q('#mood-off')) q('#mood-off').onclick = ()=>{ state.moodForm.worked = (state.moodForm.worked===false); renderMood(); };
+  if(q('#mood-save')) q('#mood-save').onclick = saveMood;
+}
+
+async function saveMood(){
+  const f = state.moodForm;
+  if(f.worked!==false && !f.mood){ toast('Оцените, как прошёл день', true); return; }
+  try{
+    await api('/mood', {method:'POST', body:jbody(f)});
+    toast('Спасибо, отметка сохранена');
+    state.moodEditing=false; state.moodForm=null;
+    await refresh();
+  }catch(e){ toast(e.message, true); }
+}
+
 function renderTrash(){
   const t = state.trash;
   if(!t){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
@@ -845,6 +1067,7 @@ function renderAll(){
   renderBell();
   if(state.route==='trademarks'||state.route==='patents') renderRegistry();
   else if(state.route==='reminders') renderReminders();
+  else if(state.route==='mood') renderMood();
   else if(state.route==='trash') renderTrash();
   else if(state.route==='log') renderLog();
 }

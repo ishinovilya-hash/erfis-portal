@@ -299,6 +299,131 @@ route('GET', '/api/export', async (req, res, _p, url) => {
   res.end(csv);
 });
 
+// ---- трекер настроения команды ----
+const MOOD_FACTORS = ['переработки','сжатые сроки','неясные задачи','много контекста/переключений','конфликт или сложное общение','нет перерывов/отдыха','монотонность','внешние обстоятельства','личное'];
+const localDate = () => {
+  // дата в МСК (UTC+3), чтобы «сегодня» совпадало с рабочим днём в РФ
+  return new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+};
+const daysAgoDate = (n) => new Date(Date.now() + 3 * 3600 * 1000 - n * 86400000).toISOString().slice(0, 10);
+
+function moodEntryApi(r) {
+  return r ? { date: r.date, mood: r.mood, workload: r.workload, worked: !!r.worked, note: r.note, factors: safeArr(r.factors) } : null;
+}
+const safeArr = (s) => { try { const a = JSON.parse(s); return Array.isArray(a) ? a : []; } catch { return []; } };
+
+function userSignal(userId) {
+  const rows = db.prepare(
+    "SELECT date, mood, workload, worked FROM mood_entries WHERE user_id = ? AND date >= ? ORDER BY date DESC"
+  ).all(userId, daysAgoDate(28));
+  const worked = rows.filter((r) => r.worked && r.mood != null);
+  const reasons = [];
+  let lowStreak = 0;
+  for (const r of worked) { if (r.mood <= 2) lowStreak++; else break; }
+  if (lowStreak >= 3) reasons.push(`${lowStreak} тяжёлых дня подряд`);
+  let overload = 0;
+  for (const r of worked.filter((x) => x.worked)) { if (r.workload === 'high') overload++; else break; }
+  if (overload >= 4) reasons.push(`${overload} дня подряд «завал»`);
+  const avg = (arr) => arr.length ? arr.reduce((s, x) => s + x.mood, 0) / arr.length : null;
+  const a7 = avg(worked.slice(0, 7)), p7 = avg(worked.slice(7, 14));
+  if (a7 != null && p7 != null && worked.length >= 10 && a7 - p7 <= -1.3) reasons.push('заметный спад за неделю');
+  return { flag: reasons.length > 0, reasons };
+}
+
+route('GET', '/api/mood/today', async (req, res) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const today = localDate();
+  const mine = db.prepare('SELECT * FROM mood_entries WHERE user_id = ? AND date = ?').get(u.id, today);
+  json(res, 200, { date: today, entry: moodEntryApi(mine), factors: MOOD_FACTORS });
+});
+
+route('POST', '/api/mood', async (req, res) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const b = await readBody(req);
+  const today = localDate();
+  const worked = b.worked === false ? 0 : 1;
+  let mood = worked ? Number(b.mood) : null;
+  if (worked && !(mood >= 1 && mood <= 5)) return json(res, 400, { error: 'Оцените день от 1 до 5' });
+  const workload = ['low', 'ok', 'high'].includes(b.workload) ? b.workload : 'ok';
+  const factors = JSON.stringify((Array.isArray(b.factors) ? b.factors : []).filter((x) => MOOD_FACTORS.includes(x)).slice(0, 9));
+  const note = String(b.note || '').trim().slice(0, 400);
+  const now = new Date().toISOString();
+  db.prepare(`INSERT INTO mood_entries (user_id,date,mood,workload,worked,note,factors,created_at,updated_at)
+    VALUES (@u,@d,@m,@w,@k,@n,@f,@now,@now)
+    ON CONFLICT(user_id,date) DO UPDATE SET mood=@m, workload=@w, worked=@k, note=@n, factors=@f, updated_at=@now`)
+    .run({ u: u.id, d: today, m: mood, w: workload, k: worked, n: note, f: factors, now });
+  json(res, 200, { ok: true, entry: moodEntryApi(db.prepare('SELECT * FROM mood_entries WHERE user_id=? AND date=?').get(u.id, today)) });
+});
+
+route('GET', '/api/mood/mine', async (req, res, _p, url) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const days = Math.min(Number(url.searchParams.get('days') || 60), 365);
+  const rows = db.prepare('SELECT * FROM mood_entries WHERE user_id = ? AND date >= ? ORDER BY date').all(u.id, daysAgoDate(days));
+  json(res, 200, { entries: rows.map(moodEntryApi) });
+});
+
+route('GET', '/api/mood/team', async (req, res, _p, url) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const days = Math.min(Number(url.searchParams.get('days') || 30), 180);
+  const since = daysAgoDate(days - 1);
+  const today = localDate();
+  const all = db.prepare('SELECT * FROM mood_entries WHERE date >= ? ORDER BY date').all(since);
+
+  // ряд: средняя по команде за день (только рабочие дни с оценкой)
+  const byDate = {};
+  for (const r of all) {
+    if (!r.worked || r.mood == null) continue;
+    (byDate[r.date] ||= []).push(r.mood);
+  }
+  const series = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = daysAgoDate(i);
+    const arr = byDate[d] || [];
+    series.push({ date: d, avg: arr.length ? +(arr.reduce((s, x) => s + x, 0) / arr.length).toFixed(2) : null, count: arr.length });
+  }
+
+  const members = EMPLOYEES.map((e) => {
+    const rows = all.filter((r) => r.user_id === e.id);
+    const todayRow = rows.find((r) => r.date === today);
+    const recent = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = daysAgoDate(i);
+      const row = rows.find((r) => r.date === d);
+      recent.push(row ? { date: d, mood: row.mood, worked: !!row.worked } : { date: d, mood: null, worked: null });
+    }
+    const worked7 = rows.filter((r) => r.worked && r.mood != null && r.date >= daysAgoDate(6));
+    const avg7 = worked7.length ? +(worked7.reduce((s, x) => s + x.mood, 0) / worked7.length).toFixed(1) : null;
+    return {
+      userId: e.id, name: e.name, initials: initialsOf(e.name),
+      todayDone: !!todayRow,
+      today: todayRow ? { mood: todayRow.mood, workload: todayRow.workload, worked: !!todayRow.worked } : null,
+      avg7, recent, signal: userSignal(e.id),
+    };
+  });
+
+  const done = members.filter((m) => m.todayDone).length;
+  json(res, 200, {
+    days, series, members,
+    participationToday: { done, total: EMPLOYEES.length },
+    teamAvg7: (() => {
+      const w = all.filter((r) => r.worked && r.mood != null && r.date >= daysAgoDate(6));
+      return w.length ? +(w.reduce((s, x) => s + x.mood, 0) / w.length).toFixed(2) : null;
+    })(),
+  });
+});
+
+route('GET', '/api/mood/export', async (req, res) => {
+  const u = currentUser(req); if (!u) return text(res, 401, 'auth');
+  const rows = db.prepare('SELECT * FROM mood_entries ORDER BY date, user_id').all();
+  const WL = { low: 'недогруз', ok: 'в норме', high: 'завал' };
+  const nameOf = (id) => EMPLOYEES.find((e) => e.id === id)?.name || id;
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const head = ['Дата', 'Сотрудник', 'Работал', 'Оценка дня (1-5)', 'Загрузка', 'Факторы', 'Комментарий'];
+  const lines = rows.map((r) => [r.date, nameOf(r.user_id), r.worked ? 'да' : 'нет', r.mood ?? '', WL[r.workload] || r.workload, safeArr(r.factors).join('; '), r.note].map(esc).join(';'));
+  res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="erfis-mood-${todayISO()}.csv"` });
+  res.end('﻿' + [head.map(esc).join(';'), ...lines].join('\r\n'));
+});
+
 // ---- health / admin ----
 route('GET', '/api/health', async (_req, res) => {
   const c = (q) => db.prepare(q).get().c;
