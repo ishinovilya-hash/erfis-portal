@@ -253,6 +253,12 @@ td.num{white-space:nowrap}
 @media (max-width:640px){.reqgrid{grid-template-columns:1fr}}
 .reqfield{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .reqfield input{padding:8px 10px;border:1px solid var(--hairline);border-radius:7px;background:var(--surface-2);font-size:13px;text-transform:none;letter-spacing:0;color:var(--ink)}
+.amountrow{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.amountrow>.field{flex:0 0 auto}
+.amountrow input#pay-amount{width:180px}
+.hotbtns{flex:1;min-width:220px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
+.hotbtns .fl{margin-bottom:1px}
+.hotbtns .chip{font-size:12px;padding:5px 10px}
 @media (max-width:560px){
   .spark{display:none}
   .mrow>div[style*="min-width:120px"]{min-width:0!important;flex:1}
@@ -1060,6 +1066,14 @@ async function saveMood(){
 }
 
 /* ---------- QR для оплаты пошлин ---------- */
+const PURPOSE_PRESETS = [
+  {label:'При подаче ТЗ', text:'п. 2.1, 2.4 Приложения № 1 к Положению о патентных и иных пошлинах за регистрацию заявки на тз № ____ и проведение экспертизы'},
+  {label:'При выдаче ТЗ', text:'п. 2.11. Прил. № 1 к Полож. о патентных и иных пошлинах за регистрацию тз по заявке № ____, выдачу свид. в форме эл. документа'},
+  {label:'При подаче ПромОбр', text:'п. 1.3, 1.10 Приложения № 2 к Положению о патентных и иных пошлинах за регистрацию заявки на ПО № ____ и принятие решения по результатам экспертизы'},
+  {label:'При выдаче ПромОбр', text:'п. 1.17 Приложения № 2 к Положению о патентных и иных пошлинах за регистрацию ПО по заявке № ____'},
+  {label:'Отчуждение ТЗ', text:'п. 3.11 Прил. № 1 к Полож. о патентных и иных пошлинах за рассм. заявления о гос. регистрации отчуждения искл. права на тз № ____'},
+  {label:'Изменение ТЗ', text:'п. 2.16, 2.17 Прил. № 1 к Положению о патентных и иных пошлинах за рассм. заявления о внесении изменений тз № ____'},
+];
 const REQ_FIELDS = [
   ['name','Наименование получателя'],['personalAcc','Казначейский счёт (поле 17)'],
   ['bankName','Банк получателя'],['bic','БИК'],['correspAcc','Единый казначейский счёт (поле 15)'],
@@ -1122,11 +1136,17 @@ function renderPayments(){
     <div class="paygrid">
       <div>
         <div class="listcard" style="padding:18px">
-          <div class="field" style="border:0;padding:0 0 12px"><label>Сумма пошлины, ₽</label>
-            <input id="pay-amount" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(f.amount)}" placeholder="напр. 12000" style="max-width:220px"/></div>
+          <div class="amountrow">
+            <div class="field" style="border:0;padding:0"><label>Сумма пошлины, ₽</label>
+              <input id="pay-amount" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(f.amount)}" placeholder="напр. 12000"/></div>
+            <div class="hotbtns">
+              <div class="fl" style="width:100%">Быстрые шаблоны назначения</div>
+              ${PURPOSE_PRESETS.map((p,i)=>`<button class="chip" data-preset="${i}" title="${esc(p.text)}">${esc(p.label)}</button>`).join('')}
+            </div>
+          </div>
           <div class="field" style="padding:12px 0"><label>Назначение платежа</label>
-            <textarea id="pay-purpose" rows="3" placeholder="Пункт Приложения к Положению, № заявки/патента/свидетельства, наименование действия. Напр.: п.1.15 — регистрация ТЗ по заявке № 2025763114">${esc(f.purpose)}</textarea>
-            <div class="hint">Так Роспатент опознаёт платёж. Одна квитанция — одна заявка/патент.</div></div>
+            <textarea id="pay-purpose" rows="4" placeholder="Пункт Приложения к Положению, № заявки/патента/свидетельства, наименование действия. Напр.: п.1.15 — регистрация ТЗ по заявке № 2025763114">${esc(f.purpose)}</textarea>
+            <div class="hint">Так Роспатент опознаёт платёж. Одна квитанция — одна заявка/патент. Шаблон подставит текст — впишите номер вместо «____».</div></div>
           <div class="grid2">
             <div class="field" style="padding:12px 0"><label>Плательщик — по желанию</label>
               <input id="pay-payer" value="${esc(f.payer)}" placeholder="ФИО или наименование клиента"/></div>
@@ -1159,6 +1179,17 @@ function renderPayments(){
   const bind = (id, ev, fn) => { const el = $('#view #'+id); if(el) el.addEventListener(ev, fn); };
   bind('pay-amount','input', e=>{ f.amount = e.target.value; scheduleQr(); });
   bind('pay-purpose','input', e=>{ f.purpose = e.target.value; scheduleQr(); });
+  document.querySelectorAll('#view [data-preset]').forEach(b=> b.addEventListener('click', ()=>{
+    f.purpose = PURPOSE_PRESETS[+b.dataset.preset].text;
+    const ta = $('#view #pay-purpose');
+    if(ta){
+      ta.value = f.purpose;
+      ta.focus();
+      const i = ta.value.indexOf('____');
+      if(i>=0) ta.setSelectionRange(i, i+4); else ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+    updateQrPane();
+  }));
   bind('pay-payer','input', e=>{ f.payer = e.target.value; scheduleQr(); });
   bind('pay-uin','input', e=>{ f.uin = e.target.value; scheduleQr(); });
   document.querySelectorAll('#view [data-req]').forEach(el=> el.addEventListener('input', ()=>{ state.requisites[el.dataset.req] = el.value; scheduleQr(); }));
