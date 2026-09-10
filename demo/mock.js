@@ -1,7 +1,7 @@
 /* Демо-режим портала ЭРФИС: подменяет /api/* на локальное хранилище браузера.
    Данные не уходят на сервер. Всё живёт в этом браузере (localStorage). */
 (function () {
-  const KEY = 'erfis_demo_v6';
+  const KEY = 'erfis_demo_v7';
   const nowISO = () => new Date().toISOString();
   const todayMSK = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
   const DAY = 86400000, SOON = 183;
