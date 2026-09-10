@@ -94,9 +94,14 @@ export function reminderDue(r) {
   return new Date(`${r.date}T${r.time || '00:00'}:00`).getTime() <= Date.now();
 }
 
+// доп. поля, хранящиеся в objects.extra (JSON)
+export const EXTRA_KEYS = ['intNo', 'contactPerson', 'email', 'registry', 'actWhen'];
+
 // DB row (snake_case) -> API object (camelCase) + computed fields
 export function rowToApi(row) {
   const reminder = row.reminder ? JSON.parse(row.reminder) : null;
+  let extra = {};
+  try { extra = row.extra ? JSON.parse(row.extra) : {}; } catch {}
   return {
     id: row.id,
     type: row.type,
@@ -113,6 +118,11 @@ export function rowToApi(row) {
     responsible: row.responsible || null,
     notes: row.notes || '',
     reminder,
+    intNo: extra.intNo || '',
+    contactPerson: extra.contactPerson || '',
+    email: extra.email || '',
+    registry: extra.registry || '',
+    actWhen: extra.actWhen || '',
     status: statusOf(row.expiry_date),
     flagged: reminderDue(reminder),
     createdAt: row.created_at,
@@ -122,7 +132,7 @@ export function rowToApi(row) {
   };
 }
 
-// Editable fields: API name -> DB column
+// Editable columns: API name -> DB column
 export const EDITABLE = {
   holder: 'holder',
   name: 'name',
@@ -145,12 +155,17 @@ export const FIELD_LABELS = {
   regNumber: '№ регистрации/патента',
   objectType: 'вид объекта',
   mktuClasses: 'классы МКТУ',
-  priorityDate: 'дата приоритета',
+  priorityDate: 'дата приоритета / отправки',
   expiryDate: 'срок действия',
   documentRef: 'документ',
   documentUrl: 'ссылка на документ',
   responsible: 'ответственный',
   notes: 'примечание',
+  intNo: 'внутренний №',
+  contactPerson: 'контактное лицо',
+  email: 'e-mail',
+  registry: 'реестр',
+  actWhen: 'когда обратиться',
 };
 
 export function initialsOf(name) {

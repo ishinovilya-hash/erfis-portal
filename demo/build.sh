@@ -8,6 +8,7 @@ cd "$(dirname "$0")/.."
 python3 - <<'PY'
 logo = open('server/public/logo.js').read()
 seed = open('server/data/seed.json').read()
+price = open('server/data/price-seed.json').read()
 mock = open('demo/mock.js').read()
 html = open('server/public/index.html').read()
 
@@ -15,7 +16,7 @@ html = html.replace('<script src="/logo.js"></script>', f'<script>{logo}</script
 html = html.replace('<script src="/qrcode.js"></script>',
                     '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>')
 marker = '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>'
-html = html.replace(marker, marker + f'\n<script>window.__SEED = {seed};</script>\n<script>{mock}</script>\n', 1)
+html = html.replace(marker, marker + f'\n<script>window.__SEED = {seed};\nwindow.__PRICE = {price};</script>\n<script>{mock}</script>\n', 1)
 html = html.replace('<title>Реестр объектов ЭРФИС</title>', '<title>Портал ЭРФИС — демо</title>')
 open('demo/index.html', 'w').write(html)
 

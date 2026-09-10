@@ -10,8 +10,10 @@ import { writeFileSync } from 'node:fs';
 import { db, seedUsers, importSeedIfEmpty, EMPLOYEES, hashPassword, verifyPassword } from './db.js';
 import {
   json, text, readBody, parseCookies, setCookie, todayISO,
-  rowToApi, EDITABLE, FIELD_LABELS, initialsOf,
+  rowToApi, EDITABLE, EXTRA_KEYS, FIELD_LABELS, initialsOf,
 } from './lib.js';
+
+const OBJECT_TYPES = ['trademark', 'patent', 'software', 'shipment'];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(__dirname, 'public');
@@ -115,29 +117,39 @@ route('POST', '/api/password', async (req, res) => {
 });
 
 // ---- registry ----
+const TYPE_PREFIX = { trademark: 'tm', patent: 'pt', software: 'sw', shipment: 'sh' };
+
 route('GET', '/api/objects', async (req, res, _p, url) => {
   const u = currentUser(req);
   if (!u) return json(res, 401, { error: 'auth' });
   const type = url.searchParams.get('type');
-  if (!['trademark', 'patent'].includes(type)) return json(res, 400, { error: 'type' });
-  const rows = db.prepare('SELECT * FROM objects WHERE type = ? AND deleted_at IS NULL ORDER BY holder, name').all(type);
+  if (!OBJECT_TYPES.includes(type)) return json(res, 400, { error: 'type' });
+  const order = type === 'shipment' ? 'priority_date DESC, id DESC' : 'holder, name';
+  const rows = db.prepare(`SELECT * FROM objects WHERE type = ? AND deleted_at IS NULL ORDER BY ${order}`).all(type);
   json(res, 200, { objects: rows.map(rowToApi) });
 });
+
+function extraFrom(b, base = {}) {
+  const e = { ...base };
+  for (const k of EXTRA_KEYS) if (k in b) e[k] = String(b[k] ?? '').trim();
+  return e;
+}
 
 route('POST', '/api/objects', async (req, res) => {
   const u = currentUser(req);
   if (!u) return json(res, 401, { error: 'auth' });
   const b = await readBody(req);
-  if (!['trademark', 'patent'].includes(b.type)) return json(res, 400, { error: 'type' });
-  if (!String(b.name || '').trim() || !String(b.holder || '').trim())
-    return json(res, 400, { error: 'Заполните название и правообладателя' });
-  const id = `${b.type === 'patent' ? 'pt' : 'tm'}-n${randomBytes(4).toString('hex')}`;
+  if (!OBJECT_TYPES.includes(b.type)) return json(res, 400, { error: 'type' });
+  if (!String(b.name || '').trim()) return json(res, 400, { error: 'Заполните название' });
+  if ((b.type === 'trademark' || b.type === 'patent') && !String(b.holder || '').trim())
+    return json(res, 400, { error: 'Заполните правообладателя' });
+  const id = `${TYPE_PREFIX[b.type]}-n${randomBytes(4).toString('hex')}`;
   const now = new Date().toISOString();
-  const vals = { id, type: b.type, created_at: now, updated_at: now };
+  const vals = { id, type: b.type, created_at: now, updated_at: now, extra: JSON.stringify(extraFrom(b)) };
   for (const [api, col] of Object.entries(EDITABLE)) vals[col] = api === 'responsible' ? (b[api] || null) : String(b[api] ?? '').trim();
   db.prepare(`INSERT INTO objects
-    (id,type,holder,name,app_number,reg_number,object_type,mktu_classes,priority_date,expiry_date,document_ref,document_url,responsible,notes,created_at,updated_at)
-    VALUES (@id,@type,@holder,@name,@app_number,@reg_number,@object_type,@mktu_classes,@priority_date,@expiry_date,@document_ref,@document_url,@responsible,@notes,@created_at,@updated_at)`).run(vals);
+    (id,type,holder,name,app_number,reg_number,object_type,mktu_classes,priority_date,expiry_date,document_ref,document_url,responsible,notes,extra,created_at,updated_at)
+    VALUES (@id,@type,@holder,@name,@app_number,@reg_number,@object_type,@mktu_classes,@priority_date,@expiry_date,@document_ref,@document_url,@responsible,@notes,@extra,@created_at,@updated_at)`).run(vals);
   logActivity('create', { id, type: b.type }, `Создан объект «${b.name}»`, u.id);
   json(res, 200, { object: rowToApi(getObj(id)) });
 });
@@ -167,6 +179,18 @@ route('PATCH', '/api/objects/:id', async (req, res, p) => {
     args[col] = next;
     changed.push(FIELD_LABELS[api] || api);
   }
+  // доп. поля (extra JSON)
+  let curExtra = {};
+  try { curExtra = row.extra ? JSON.parse(row.extra) : {}; } catch {}
+  let extraChanged = false;
+  for (const k of EXTRA_KEYS) {
+    if (!(k in b)) continue;
+    const next = String(b[k] ?? '').trim();
+    if (String(curExtra[k] ?? '') === next) continue;
+    curExtra[k] = next; extraChanged = true;
+    changed.push(FIELD_LABELS[k] || k);
+  }
+  if (extraChanged) { sets.push('extra = @extra'); args.extra = JSON.stringify(curExtra); }
   if (!sets.length) return json(res, 200, { object: rowToApi(row), unchanged: true });
   args.id = p.id;
   args.updated_at = new Date().toISOString();
@@ -284,11 +308,16 @@ route('GET', '/api/export', async (req, res, _p, url) => {
   const u = currentUser(req);
   if (!u) return text(res, 401, 'auth');
   const type = url.searchParams.get('type');
-  if (!['trademark', 'patent'].includes(type)) return text(res, 400, 'type');
-  const rows = db.prepare('SELECT * FROM objects WHERE type = ? AND deleted_at IS NULL ORDER BY holder, name').all(type).map(rowToApi);
-  const cols = type === 'patent'
-    ? [['holder', 'Правообладатель'], ['objectType', 'Вид'], ['name', 'Название'], ['appNumber', '№ заявки'], ['regNumber', '№ патента'], ['priorityDate', 'Приоритет'], ['expiryDate', 'Действует до'], ['status', 'Статус'], ['responsible', 'Ответственный']]
-    : [['holder', 'Правообладатель'], ['appNumber', '№ заявки'], ['name', 'Название'], ['regNumber', '№ регистрации'], ['mktuClasses', 'Классы МКТУ'], ['priorityDate', 'Приоритет'], ['expiryDate', 'Действует до'], ['status', 'Статус'], ['responsible', 'Ответственный']];
+  if (!OBJECT_TYPES.includes(type)) return text(res, 400, 'type');
+  const order = type === 'shipment' ? 'priority_date DESC, id DESC' : 'holder, name';
+  const rows = db.prepare(`SELECT * FROM objects WHERE type = ? AND deleted_at IS NULL ORDER BY ${order}`).all(type).map(rowToApi);
+  const COLS = {
+    trademark: [['holder', 'Правообладатель'], ['appNumber', '№ заявки'], ['name', 'Название'], ['regNumber', '№ регистрации'], ['mktuClasses', 'Классы МКТУ'], ['priorityDate', 'Приоритет'], ['expiryDate', 'Действует до'], ['status', 'Статус'], ['responsible', 'Ответственный']],
+    patent: [['holder', 'Правообладатель'], ['objectType', 'Вид'], ['name', 'Название'], ['appNumber', '№ заявки'], ['regNumber', '№ патента'], ['priorityDate', 'Приоритет'], ['expiryDate', 'Действует до'], ['status', 'Статус'], ['responsible', 'Ответственный']],
+    software: [['intNo', 'Вн. №'], ['name', 'Название'], ['regNumber', '№ регистрации'], ['holder', 'Правообладатель'], ['contactPerson', 'Контактное лицо'], ['email', 'E-mail'], ['registry', 'Реестр'], ['actWhen', 'Когда обратиться'], ['responsible', 'Ответственный']],
+    shipment: [['priorityDate', 'Дата'], ['name', 'Вид документа'], ['regNumber', '№ объекта'], ['appNumber', '№ делопроизводства'], ['responsible', 'Ответственный']],
+  };
+  const cols = COLS[type];
   const nameOf = (id) => EMPLOYEES.find((e) => e.id === id)?.name || '';
   const cell = (o, k) => k === 'status' ? o.status.label : k === 'responsible' ? nameOf(o.responsible) : (o[k] ?? '');
   const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
@@ -479,6 +508,58 @@ route('DELETE', '/api/payments/:id', async (req, res, p) => {
   json(res, 200, { ok: true });
 });
 
+// ---- прайс ЭРФИС ----
+const priceApi = (r) => ({ id: r.id, category: r.category, name: r.name, fee: r.fee, duty: r.duty, total: r.total, note: r.note, updatedAt: r.updated_at, updatedBy: r.updated_by });
+
+route('GET', '/api/price', async (req, res) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const rows = db.prepare('SELECT * FROM price_items ORDER BY sort, id').all();
+  json(res, 200, { items: rows.map(priceApi) });
+});
+
+route('PATCH', '/api/price/:id', async (req, res, p) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const row = db.prepare('SELECT * FROM price_items WHERE id = ?').get(Number(p.id));
+  if (!row) return json(res, 404, { error: 'not found' });
+  const b = await readBody(req);
+  const F = ['category', 'name', 'fee', 'duty', 'total', 'note'];
+  const sets = [], args = { id: row.id, now: new Date().toISOString(), by: u.id };
+  for (const k of F) if (k in b && String(b[k] ?? '') !== String(row[k] ?? '')) { sets.push(`${k} = @${k}`); args[k] = String(b[k] ?? ''); }
+  if (!sets.length) return json(res, 200, { item: priceApi(row), unchanged: true });
+  db.prepare(`UPDATE price_items SET ${sets.join(', ')}, updated_at = @now, updated_by = @by WHERE id = @id`).run(args);
+  logActivity('price', null, `Изменена цена: «${row.name.slice(0, 60)}»`, u.id);
+  json(res, 200, { item: priceApi(db.prepare('SELECT * FROM price_items WHERE id = ?').get(row.id)) });
+});
+
+route('POST', '/api/price', async (req, res) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const b = await readBody(req);
+  if (!String(b.name || '').trim()) return json(res, 400, { error: 'Укажите наименование работы' });
+  const maxSort = db.prepare('SELECT COALESCE(MAX(sort),0) s FROM price_items').get().s;
+  const r = db.prepare('INSERT INTO price_items (category,name,fee,duty,total,note,sort,updated_at,updated_by) VALUES (?,?,?,?,?,?,?,?,?)')
+    .run(String(b.category || '').trim(), String(b.name).trim(), String(b.fee || '').trim(), String(b.duty || '').trim(), String(b.total || '').trim(), String(b.note || '').trim(), maxSort + 1, new Date().toISOString(), u.id);
+  logActivity('price', null, `Добавлена услуга в прайс: «${String(b.name).slice(0, 60)}»`, u.id);
+  json(res, 200, { id: r.lastInsertRowid });
+});
+
+route('DELETE', '/api/price/:id', async (req, res, p) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const row = db.prepare('SELECT name FROM price_items WHERE id = ?').get(Number(p.id));
+  db.prepare('DELETE FROM price_items WHERE id = ?').run(Number(p.id));
+  if (row) logActivity('price', null, `Удалена услуга из прайса: «${row.name.slice(0, 60)}»`, u.id);
+  json(res, 200, { ok: true });
+});
+
+route('GET', '/api/price/export', async (req, res) => {
+  const u = currentUser(req); if (!u) return text(res, 401, 'auth');
+  const rows = db.prepare('SELECT * FROM price_items ORDER BY sort, id').all();
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const head = ['Категория', 'Наименование работы', 'Гонорар (руб.)', 'Пошлина (руб.)', 'Всего (руб.)', 'Примечание'];
+  const csv = '﻿' + [head.map(esc).join(';'), ...rows.map((r) => [r.category, r.name, r.fee, r.duty, r.total, r.note].map(esc).join(';'))].join('\r\n');
+  res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="erfis-price-${todayISO()}.csv"` });
+  res.end(csv);
+});
+
 // ---- health / admin ----
 route('GET', '/api/health', async (_req, res) => {
   const c = (q) => db.prepare(q).get().c;
@@ -488,6 +569,9 @@ route('GET', '/api/health', async (_req, res) => {
     ok: true, version: VERSION, tunnelUrl,
     trademarks: c("SELECT COUNT(*) c FROM objects WHERE type='trademark' AND deleted_at IS NULL"),
     patents: c("SELECT COUNT(*) c FROM objects WHERE type='patent' AND deleted_at IS NULL"),
+    software: c("SELECT COUNT(*) c FROM objects WHERE type='software' AND deleted_at IS NULL"),
+    shipments: c("SELECT COUNT(*) c FROM objects WHERE type='shipment' AND deleted_at IS NULL"),
+    price: c('SELECT COUNT(*) c FROM price_items'),
     trash: c('SELECT COUNT(*) c FROM objects WHERE deleted_at IS NOT NULL'),
     activity: c('SELECT COUNT(*) c FROM activity'),
     remindersDue: db.prepare("SELECT * FROM objects WHERE reminder IS NOT NULL AND deleted_at IS NULL").all()
@@ -517,23 +601,37 @@ route('POST', '/api/admin/import', async (req, res) => {
   const s = (v) => (v == null ? '' : String(v).trim());
   const now = new Date().toISOString();
   const ins = db.prepare(`INSERT OR REPLACE INTO objects
-    (id,type,holder,name,app_number,reg_number,object_type,mktu_classes,priority_date,expiry_date,document_ref,document_url,responsible,notes,reminder,created_at,updated_at)
+    (id,type,holder,name,app_number,reg_number,object_type,mktu_classes,priority_date,expiry_date,document_ref,document_url,responsible,notes,reminder,extra,created_at,updated_at)
     VALUES (@id,@type,@holder,@name,@app_number,@reg_number,@object_type,@mktu_classes,@priority_date,@expiry_date,@document_ref,@document_url,
       COALESCE((SELECT responsible FROM objects WHERE id=@id),NULL),
       COALESCE((SELECT notes FROM objects WHERE id=@id),''),
-      (SELECT reminder FROM objects WHERE id=@id), COALESCE((SELECT created_at FROM objects WHERE id=@id),@now), @now)`);
+      (SELECT reminder FROM objects WHERE id=@id), @extra, COALESCE((SELECT created_at FROM objects WHERE id=@id),@now), @now)`);
+  const D = { holder: '', name: '', app_number: '', reg_number: '', object_type: '', mktu_classes: '', priority_date: '', expiry_date: '', document_ref: '', document_url: '', extra: '{}' };
   let n = 0;
   db.exec('BEGIN');
   try {
     for (const t of raw.trademarks || []) {
-      ins.run({ id: t.id, type: 'trademark', holder: s(t.holder), name: s(t.name), app_number: s(t.appNumber),
-        reg_number: s(t.regNumber), object_type: '', mktu_classes: s(t.mktuClasses), priority_date: s(t.priorityDate),
-        expiry_date: s(t.expiryDate), document_ref: s(t.certificate), document_url: '', now }); n++;
+      ins.run({ ...D, id: t.id, type: 'trademark', holder: s(t.holder), name: s(t.name), app_number: s(t.appNumber),
+        reg_number: s(t.regNumber), mktu_classes: s(t.mktuClasses), priority_date: s(t.priorityDate),
+        expiry_date: s(t.expiryDate), document_ref: s(t.certificate), now }); n++;
     }
     for (const p of raw.patents || []) {
-      ins.run({ id: p.id, type: 'patent', holder: s(p.holder), name: s(p.name), app_number: s(p.appNumber),
-        reg_number: s(p.patentNumber), object_type: s(p.objectType), mktu_classes: '', priority_date: s(p.priorityDate),
-        expiry_date: s(p.expiryDate), document_ref: s(p.patentFile), document_url: '', now }); n++;
+      ins.run({ ...D, id: p.id, type: 'patent', holder: s(p.holder), name: s(p.name), app_number: s(p.appNumber),
+        reg_number: s(p.patentNumber), object_type: s(p.objectType), priority_date: s(p.priorityDate),
+        expiry_date: s(p.expiryDate), document_ref: s(p.patentFile), now }); n++;
+    }
+    for (const w of raw.software || []) {
+      ins.run({ ...D, id: w.id, type: 'software', holder: s(w.holder), name: s(w.name), reg_number: s(w.regNumber),
+        extra: JSON.stringify({ intNo: s(w.intNo), contactPerson: s(w.contactPerson), email: s(w.email), registry: s(w.registry), actWhen: s(w.actWhen) }), now }); n++;
+    }
+    for (const sh of raw.shipments || []) {
+      ins.run({ ...D, id: sh.id, type: 'shipment', name: s(sh.docType), reg_number: s(sh.objectNumber),
+        app_number: s(sh.caseNumber), priority_date: s(sh.date), now }); n++;
+    }
+    if (Array.isArray(raw.price) && raw.price.length) {
+      db.prepare('DELETE FROM price_items').run();
+      const pins = db.prepare('INSERT INTO price_items (category,name,fee,duty,total,note,sort) VALUES (?,?,?,?,?,?,?)');
+      raw.price.forEach((it, i) => pins.run(it.category || '', it.name || '', it.fee || '', it.duty || '', it.total || '', it.note || '', i));
     }
     db.prepare('INSERT OR REPLACE INTO meta (k,v) VALUES (?,?)').run('imported_at', now);
     db.prepare('INSERT INTO activity (at,kind,object_id,object_type,text,user_id) VALUES (?,?,?,?,?,?)')

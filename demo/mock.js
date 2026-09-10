@@ -1,12 +1,10 @@
 /* Демо-режим портала ЭРФИС: подменяет /api/* на локальное хранилище браузера.
    Данные не уходят на сервер. Всё живёт в этом браузере (localStorage). */
 (function () {
-  const KEY = 'erfis_demo_v3';
-  const DAY = 86400000;
-  const SOON = 183;
+  const KEY = 'erfis_demo_v5';
   const nowISO = () => new Date().toISOString();
   const todayMSK = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
-  const dAgo = (n) => new Date(Date.now() + 3 * 3600e3 - n * DAY).toISOString().slice(0, 10);
+  const DAY = 86400000, SOON = 183;
 
   const USERS = [
     { id: 'u_ishinov', name: 'Илья Ишинов', email: 'ishinov@erfis.ru', initials: 'ИИ', isManager: true },
@@ -21,58 +19,50 @@
     bic: '024501901', correspAcc: '40102810045370000002',
     inn: '7730176088', kpp: '773001001', cbc: '16811505020016000140', oktmo: '45318000', payerStatus: '',
   };
-  const MOOD_FACTORS = ['переработки', 'сжатые сроки', 'неясные задачи', 'много контекста/переключений', 'конфликт или сложное общение', 'нет перерывов/отдыха', 'монотонность', 'внешние обстоятельства', 'личное'];
 
   function seed() {
-    const raw = window.__SEED || { trademarks: [], patents: [] };
+    const raw = window.__SEED || { trademarks: [], patents: [], software: [], shipments: [] };
     const s = (v) => (v == null ? '' : String(v).trim());
+    const O = (o) => Object.assign({
+      id: '', type: '', holder: '', name: '', appNumber: '', regNumber: '', objectType: '', mktuClasses: '',
+      priorityDate: '', expiryDate: '', documentRef: '', documentUrl: '', responsible: null, notes: '', reminder: null,
+      intNo: '', contactPerson: '', email: '', registry: '', actWhen: '',
+      createdAt: nowISO(), updatedAt: nowISO(), deletedAt: null, deletedBy: null,
+    }, o);
     const objects = [];
-    raw.trademarks.forEach((t, i) => objects.push({
+    (raw.trademarks || []).forEach((t, i) => objects.push(O({
       id: t.id, type: 'trademark', holder: s(t.holder), name: s(t.name), appNumber: s(t.appNumber),
-      regNumber: s(t.regNumber), objectType: '', mktuClasses: s(t.mktuClasses), priorityDate: s(t.priorityDate),
-      expiryDate: s(t.expiryDate), documentRef: s(t.certificate), documentUrl: '',
+      regNumber: s(t.regNumber), mktuClasses: s(t.mktuClasses), priorityDate: s(t.priorityDate),
+      expiryDate: s(t.expiryDate), documentRef: s(t.certificate),
       responsible: i % 7 === 0 ? 'u_konovalova' : i % 11 === 0 ? 'u_petrov' : null,
-      notes: '', reminder: null, createdAt: nowISO(), updatedAt: nowISO(), deletedAt: null, deletedBy: null,
-    }));
-    raw.patents.forEach((p, i) => objects.push({
+    })));
+    (raw.patents || []).forEach((p, i) => objects.push(O({
       id: p.id, type: 'patent', holder: s(p.holder), name: s(p.name), appNumber: s(p.appNumber),
-      regNumber: s(p.patentNumber), objectType: s(p.objectType), mktuClasses: '', priorityDate: s(p.priorityDate),
-      expiryDate: s(p.expiryDate), documentRef: s(p.patentFile), documentUrl: '',
+      regNumber: s(p.patentNumber), objectType: s(p.objectType), priorityDate: s(p.priorityDate),
+      expiryDate: s(p.expiryDate), documentRef: s(p.patentFile),
       responsible: i % 9 === 0 ? 'u_milyukov' : null,
-      notes: '', reminder: null, createdAt: nowISO(), updatedAt: nowISO(), deletedAt: null, deletedBy: null,
-    }));
-    // пара демо-напоминаний
+    })));
+    (raw.software || []).forEach((w) => objects.push(O({
+      id: w.id, type: 'software', holder: s(w.holder), name: s(w.name), regNumber: s(w.regNumber),
+      intNo: s(w.intNo), contactPerson: s(w.contactPerson), email: s(w.email), registry: s(w.registry), actWhen: s(w.actWhen),
+    })));
+    (raw.shipments || []).forEach((sh) => objects.push(O({
+      id: sh.id, type: 'shipment', name: s(sh.docType), regNumber: s(sh.objectNumber),
+      appNumber: s(sh.caseNumber), priorityDate: s(sh.date),
+    })));
     const setRem = (id, days, note, by) => {
       const o = objects.find((x) => x.id === id); if (!o) return;
-      o.reminder = { date: dAgo(-days), time: '10:00', note, createdBy: by, createdAt: nowISO(), acknowledged: false };
+      o.reminder = { date: new Date(Date.now() + days * DAY).toISOString().slice(0, 10), time: '10:00', note, createdBy: by, createdAt: nowISO(), acknowledged: false };
     };
-    setRem(objects[6].id, -3, 'оплатить пошлину за продление', 'u_konovalova');
-    setRem(objects[13].id, 12, 'подготовить документы к продлению', 'u_ishinov');
+    setRem(objects[6].id, 3, 'оплатить пошлину за продление', 'u_konovalova');
+    setRem(objects[13].id, -12, 'подготовить документы к продлению', 'u_ishinov');
 
-    // демо-настроение за 3 недели
-    const mood = [];
-    for (let d = 20; d >= 1; d--) {
-      const dt = dAgo(d); const dow = new Date(dt).getDay();
-      if (dow === 0 || dow === 6) continue;
-      USERS.forEach((u, ui) => {
-        let m, wl, fac = [];
-        if (u.id === 'u_milyukov') {
-          m = d > 9 ? (d % 2 ? 4 : 3) : d > 4 ? 2 : 2;
-          wl = d <= 10 ? 'high' : 'ok';
-          if (m <= 2) fac = ['переработки', 'сжатые сроки'];
-        } else {
-          m = [3, 3, 4, 4, 4, 5, 3, 4][(d + ui) % 8];
-          wl = ['ok', 'ok', 'high', 'low', 'ok'][(d + ui) % 5];
-        }
-        if (d === 1 && u.id === 'u_ishinov') return;
-        mood.push({ userId: u.id, date: dt, mood: m, workload: wl, worked: 1, note: '', factors: fac });
-      });
-    }
+    const price = (window.__PRICE || []).map((p, i) => ({ id: i + 1, category: p.category || '', name: p.name || '', fee: p.fee || '', duty: p.duty || '', total: p.total || '', note: p.note || '', updatedAt: null, updatedBy: null }));
 
     return {
-      session: null, objects, mood, payments: [], requisites: { ...REQUISITES },
-      activity: [{ id: 1, at: nowISO(), kind: 'import', text: `Импорт из «РЕЕСТР ОБЪЕКТОВ ЭРФИС.xlsx» — ${objects.length} объектов`, userId: null }],
-      seq: { activity: 2, payment: 1 },
+      session: null, objects, payments: [], requisites: { ...REQUISITES }, price,
+      activity: [{ id: 1, at: nowISO(), kind: 'import', text: `Импорт данных — ${objects.length} объектов`, userId: null }],
+      seq: { activity: 2, payment: 1, price: price.length + 1 },
     };
   }
 
@@ -95,26 +85,15 @@
   const toApi = (o) => ({ ...o, status: statusOf(o.expiryDate), flagged: remDue(o.reminder) });
   const logAct = (kind, o, text) => { db.activity.push({ id: db.seq.activity++, at: nowISO(), kind, objectId: o && o.id, objectType: o && o.type, text, userId: db.session }); };
   const J = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-  const T = (body, status = 200, type = 'text/plain;charset=utf-8') => new Response(body, { status, headers: { 'Content-Type': type } });
-
-  function moodSignal(userId) {
-    const rows = db.mood.filter((r) => r.userId === userId && r.date >= dAgo(28) && r.mood != null).sort((a, b) => b.date.localeCompare(a.date));
-    const reasons = [];
-    let low = 0; for (const r of rows) { if (r.mood <= 2) low++; else break; }
-    if (low >= 3) reasons.push(`${low} тяжёлых дня подряд`);
-    let ov = 0; for (const r of rows) { if (r.workload === 'high') ov++; else break; }
-    if (ov >= 4) reasons.push(`${ov} дня подряд «завал»`);
-    const avg = (a) => (a.length ? a.reduce((s, x) => s + x.mood, 0) / a.length : null);
-    const a7 = avg(rows.slice(0, 7)), p7 = avg(rows.slice(7, 14));
-    if (a7 != null && p7 != null && rows.length >= 10 && a7 - p7 <= -1.3) reasons.push('заметный спад за неделю');
-    return { flag: reasons.length > 0, reasons };
-  }
+  const T = (body, status = 200) => new Response(body, { status, headers: { 'Content-Type': 'text/csv;charset=utf-8' } });
+  const EDIT_KEYS = ['holder', 'name', 'appNumber', 'regNumber', 'objectType', 'mktuClasses', 'priorityDate', 'expiryDate', 'documentRef', 'notes', 'intNo', 'contactPerson', 'email', 'registry', 'actWhen'];
+  const LBL = { holder: 'правообладатель', name: 'название', appNumber: '№ заявки', regNumber: '№ регистрации/патента', objectType: 'вид', mktuClasses: 'классы МКТУ', priorityDate: 'дата', expiryDate: 'срок', documentRef: 'документ', notes: 'примечание', intNo: 'внутренний №', contactPerson: 'контактное лицо', email: 'e-mail', registry: 'реестр', actWhen: 'когда обратиться', responsible: 'ответственный' };
 
   const realFetch = window.fetch.bind(window);
   window.fetch = async function (url, opts = {}) {
     const u = typeof url === 'string' ? url : url.url;
     if (!u || u.indexOf('/api/') !== 0) return realFetch(url, opts);
-    await new Promise((r) => setTimeout(r, 60));
+    await new Promise((r) => setTimeout(r, 50));
     const method = (opts.method || 'GET').toUpperCase();
     const [path, qs] = u.slice(4).split('?');
     const q = new URLSearchParams(qs || '');
@@ -140,17 +119,18 @@
       // ---- objects ----
       if (path === '/objects' && method === 'GET') {
         const type = q.get('type');
-        return J({ objects: db.objects.filter((o) => o.type === type && !o.deletedAt).sort((a, b) => (a.holder + a.name).localeCompare(b.holder + b.name)).map(toApi) });
+        let rows = db.objects.filter((o) => o.type === type && !o.deletedAt);
+        rows = type === 'shipment' ? rows.sort((a, b) => (b.priorityDate || '').localeCompare(a.priorityDate || ''))
+          : rows.sort((a, b) => (a.holder + a.name).localeCompare(b.holder + b.name));
+        return J({ objects: rows.map(toApi) });
       }
       if (path === '/objects' && method === 'POST') {
-        if (!body.name || !body.holder) return J({ error: 'Заполните название и правообладателя' }, 400);
-        const o = {
-          id: (body.type === 'patent' ? 'pt' : 'tm') + '-n' + Math.random().toString(36).slice(2, 7),
-          type: body.type, holder: '', name: '', appNumber: '', regNumber: '', objectType: '', mktuClasses: '',
-          priorityDate: '', expiryDate: '', documentRef: '', documentUrl: '', responsible: null, notes: '',
-          reminder: null, createdAt: nowISO(), updatedAt: nowISO(), deletedAt: null, deletedBy: null,
-        };
-        ['holder', 'name', 'appNumber', 'regNumber', 'objectType', 'mktuClasses', 'priorityDate', 'expiryDate', 'documentRef', 'documentUrl', 'notes', 'responsible'].forEach((k) => { if (k in body) o[k] = body[k] || (k === 'responsible' ? null : ''); });
+        if (!String(body.name || '').trim()) return J({ error: 'Заполните название' }, 400);
+        if ((body.type === 'trademark' || body.type === 'patent') && !String(body.holder || '').trim()) return J({ error: 'Заполните правообладателя' }, 400);
+        const pfx = { trademark: 'tm', patent: 'pt', software: 'sw', shipment: 'sh' }[body.type];
+        const o = { id: pfx + '-n' + Math.random().toString(36).slice(2, 7), type: body.type, responsible: null, reminder: null, createdAt: nowISO(), updatedAt: nowISO(), deletedAt: null, deletedBy: null };
+        EDIT_KEYS.forEach((k) => o[k] = String(body[k] ?? '').trim());
+        o.responsible = body.responsible || null;
         db.objects.unshift(o); logAct('create', o, `Создан объект «${o.name}»`); save();
         return J({ object: toApi(o) });
       }
@@ -160,12 +140,11 @@
         if (method === 'GET') return J({ object: toApi(o), activity: db.activity.filter((a) => a.objectId === o.id).slice(-30).reverse() });
         if (method === 'PATCH') {
           const changed = [];
-          const L = { holder: 'правообладатель', name: 'название', appNumber: '№ заявки', regNumber: '№ регистрации/патента', objectType: 'вид', mktuClasses: 'классы МКТУ', priorityDate: 'приоритет', expiryDate: 'срок', responsible: 'ответственный', notes: 'примечание', documentRef: 'документ', documentUrl: 'ссылка' };
-          Object.keys(L).forEach((k) => {
+          [...EDIT_KEYS, 'responsible'].forEach((k) => {
             if (!(k in body)) return;
             const nv = k === 'responsible' ? (body[k] || null) : String(body[k] ?? '').trim();
             if (String(o[k] ?? '') === String(nv ?? '')) return;
-            o[k] = nv; changed.push(L[k]);
+            o[k] = nv; changed.push(LBL[k] || k);
           });
           if (!changed.length) return J({ object: toApi(o), unchanged: true });
           o.updatedAt = nowISO(); logAct('edit', o, `Изменён объект «${o.name}» (${changed.join(', ')})`); save();
@@ -199,82 +178,32 @@
 
       if (path === '/export') {
         const type = q.get('type');
-        const rows = db.objects.filter((o) => o.type === type && !o.deletedAt).map(toApi);
-        const cols = type === 'patent'
-          ? [['holder', 'Правообладатель'], ['objectType', 'Вид'], ['name', 'Название'], ['appNumber', '№ заявки'], ['regNumber', '№ патента'], ['priorityDate', 'Приоритет'], ['expiryDate', 'Действует до'], ['status', 'Статус'], ['responsible', 'Ответственный']]
-          : [['holder', 'Правообладатель'], ['appNumber', '№ заявки'], ['name', 'Название'], ['regNumber', '№ регистрации'], ['mktuClasses', 'Классы МКТУ'], ['priorityDate', 'Приоритет'], ['expiryDate', 'Действует до'], ['status', 'Статус'], ['responsible', 'Ответственный']];
+        let rows = db.objects.filter((o) => o.type === type && !o.deletedAt).map(toApi);
+        const C = {
+          trademark: [['holder', 'Правообладатель'], ['appNumber', '№ заявки'], ['name', 'Название'], ['regNumber', '№ регистрации'], ['mktuClasses', 'Классы МКТУ'], ['priorityDate', 'Приоритет'], ['expiryDate', 'Действует до'], ['status', 'Статус'], ['responsible', 'Ответственный']],
+          patent: [['holder', 'Правообладатель'], ['objectType', 'Вид'], ['name', 'Название'], ['appNumber', '№ заявки'], ['regNumber', '№ патента'], ['priorityDate', 'Приоритет'], ['expiryDate', 'Действует до'], ['status', 'Статус'], ['responsible', 'Ответственный']],
+          software: [['intNo', 'Вн. №'], ['name', 'Название'], ['regNumber', '№ регистрации'], ['holder', 'Правообладатель'], ['contactPerson', 'Контактное лицо'], ['email', 'E-mail'], ['registry', 'Реестр'], ['actWhen', 'Когда обратиться'], ['responsible', 'Ответственный']],
+          shipment: [['priorityDate', 'Дата'], ['name', 'Вид документа'], ['regNumber', '№ объекта'], ['appNumber', '№ делопроизводства'], ['responsible', 'Ответственный']],
+        }[type];
         const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
         const cell = (o, k) => k === 'status' ? o.status.label : k === 'responsible' ? (uById(o.responsible)?.name || '') : o[k] || '';
-        const csv = '﻿' + [cols.map((c) => esc(c[1])).join(';'), ...rows.map((o) => cols.map((c) => esc(cell(o, c[0]))).join(';'))].join('\r\n');
-        return T(csv, 200, 'text/csv;charset=utf-8');
+        return T('﻿' + [C.map((c) => esc(c[1])).join(';'), ...rows.map((o) => C.map((c) => esc(cell(o, c[0]))).join(';'))].join('\r\n'));
       }
 
-      // ---- health ----
       if (path === '/health') {
         const act = db.objects.filter((o) => !o.deletedAt);
         return J({
           ok: true, version: 'demo', tunnelUrl: null,
           trademarks: act.filter((o) => o.type === 'trademark').length,
           patents: act.filter((o) => o.type === 'patent').length,
+          software: act.filter((o) => o.type === 'software').length,
+          shipments: act.filter((o) => o.type === 'shipment').length,
+          price: db.price.length,
           trash: db.objects.filter((o) => o.deletedAt).length,
           activity: db.activity.length,
           remindersDue: act.filter((o) => remDue(o.reminder)).length,
           importedAt: nowISO(),
         });
-      }
-
-      // ---- mood ----
-      if (path === '/mood/today') {
-        const e = db.mood.find((m) => m.userId === db.session && m.date === todayMSK());
-        return J({ date: todayMSK(), entry: e ? { date: e.date, mood: e.mood, workload: e.workload, worked: true, note: e.note, factors: e.factors } : null, factors: MOOD_FACTORS });
-      }
-      if (path === '/mood' && method === 'POST') {
-        const d = todayMSK();
-        let e = db.mood.find((m) => m.userId === db.session && m.date === d);
-        if (!e) { e = { userId: db.session, date: d }; db.mood.push(e); }
-        e.mood = body.mood; e.workload = body.workload || 'ok'; e.worked = 1; e.note = (body.note || '').trim();
-        e.factors = (body.factors || []).filter((x) => MOOD_FACTORS.includes(x));
-        save(); return J({ ok: true });
-      }
-      if (path === '/mood/team') {
-        if (!cu.isManager) return J({ error: 'Раздел доступен только руководителю' }, 403);
-        const days = 30;
-        const series = [];
-        for (let i = days - 1; i >= 0; i--) {
-          const dt = dAgo(i); const arr = db.mood.filter((m) => m.date === dt && m.mood != null).map((m) => m.mood);
-          series.push({ date: dt, avg: arr.length ? +(arr.reduce((s, x) => s + x, 0) / arr.length).toFixed(2) : null, count: arr.length });
-        }
-        const members = USERS.map((e) => {
-          const rows = db.mood.filter((m) => m.userId === e.id);
-          const t = rows.find((m) => m.date === todayMSK());
-          const recent = [];
-          for (let i = 13; i >= 0; i--) { const dt = dAgo(i); const r = rows.find((m) => m.date === dt); recent.push(r ? { date: dt, mood: r.mood, worked: true } : { date: dt, mood: null, worked: null }); }
-          const w7 = rows.filter((m) => m.mood != null && m.date >= dAgo(6));
-          return {
-            userId: e.id, name: e.name, initials: e.initials, todayDone: !!t,
-            today: t ? { mood: t.mood, workload: t.workload, worked: true } : null,
-            avg7: w7.length ? +(w7.reduce((s, x) => s + x.mood, 0) / w7.length).toFixed(1) : null,
-            recent, signal: moodSignal(e.id),
-          };
-        });
-        const w = db.mood.filter((m) => m.mood != null && m.date >= dAgo(6));
-        return J({
-          days, series, members,
-          participationToday: { done: members.filter((m) => m.todayDone).length, total: USERS.length },
-          teamAvg7: w.length ? +(w.reduce((s, x) => s + x.mood, 0) / w.length).toFixed(2) : null,
-        });
-      }
-      if (path === '/mood/mine') {
-        if (!cu.isManager) return J({ error: 'forbidden' }, 403);
-        return J({ entries: db.mood.filter((m) => m.userId === db.session && m.date >= dAgo(60)).sort((a, b) => a.date.localeCompare(b.date)).map((m) => ({ date: m.date, mood: m.mood, workload: m.workload, worked: true, note: m.note, factors: m.factors })) });
-      }
-      if (path === '/mood/export') {
-        if (!cu.isManager) return T('forbidden', 403);
-        const WL = { low: 'недогруз', ok: 'в норме', high: 'завал' };
-        const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-        const head = ['Дата', 'Сотрудник', 'Оценка дня', 'Загрузка', 'Факторы', 'Комментарий'];
-        const lines = db.mood.slice().sort((a, b) => a.date.localeCompare(b.date)).map((r) => [r.date, uById(r.userId).name, r.mood, WL[r.workload], (r.factors || []).join('; '), r.note].map(esc).join(';'));
-        return T('﻿' + [head.map(esc).join(';'), ...lines].join('\r\n'), 200, 'text/csv;charset=utf-8');
       }
 
       // ---- payments ----
@@ -292,6 +221,30 @@
       }
       if (seg[0] === 'payments' && seg[1] && method === 'DELETE') { db.payments = db.payments.filter((x) => x.id != seg[1]); save(); return J({ ok: true }); }
 
+      // ---- price ----
+      if (path === '/price' && method === 'GET') return J({ items: db.price.slice() });
+      if (path === '/price' && method === 'POST') {
+        if (!String(body.name || '').trim()) return J({ error: 'Укажите наименование работы' }, 400);
+        const it = { id: db.seq.price++, category: (body.category || '').trim(), name: body.name.trim(), fee: (body.fee || '').trim(), duty: (body.duty || '').trim(), total: (body.total || '').trim(), note: '', updatedAt: nowISO(), updatedBy: db.session };
+        db.price.push(it); logAct('price', null, `Добавлена услуга в прайс: «${it.name.slice(0, 60)}»`); save();
+        return J({ id: it.id });
+      }
+      if (path === '/price/export') {
+        const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const head = ['Категория', 'Наименование работы', 'Гонорар (руб.)', 'Пошлина (руб.)', 'Всего (руб.)', 'Примечание'];
+        return T('﻿' + [head.map(esc).join(';'), ...db.price.map((r) => [r.category, r.name, r.fee, r.duty, r.total, r.note].map(esc).join(';'))].join('\r\n'));
+      }
+      if (seg[0] === 'price' && seg[1]) {
+        const it = db.price.find((x) => x.id == seg[1]); if (!it) return J({ error: 'not found' }, 404);
+        if (method === 'PATCH') {
+          ['category', 'name', 'fee', 'duty', 'total', 'note'].forEach((k) => { if (k in body) it[k] = String(body[k] ?? ''); });
+          it.updatedAt = nowISO(); it.updatedBy = db.session;
+          logAct('price', null, `Изменена цена: «${it.name.slice(0, 60)}»`); save();
+          return J({ item: it });
+        }
+        if (method === 'DELETE') { db.price = db.price.filter((x) => x.id != seg[1]); logAct('price', null, `Удалена услуга из прайса: «${it.name.slice(0, 60)}»`); save(); return J({ ok: true }); }
+      }
+
       return J({ error: 'not found: ' + path }, 404);
     } catch (e) {
       console.error('mock error', path, e);
@@ -299,7 +252,6 @@
     }
   };
 
-  // мини-баннер «демо»
   addEventListener('DOMContentLoaded', () => {
     const b = document.createElement('div');
     b.textContent = 'Демо-версия · данные хранятся только в этом браузере · вход: любой из 4 e-mail + любой пароль';

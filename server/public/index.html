@@ -192,48 +192,6 @@ td.num{white-space:nowrap}
 .lrow.due{background:var(--flag-bg);box-shadow:inset 3px 0 0 var(--flag-edge)}
 .when{font-size:12px;color:var(--ink-3);white-space:nowrap;font-family:"IBM Plex Mono",monospace}
 
-/* ---------- трекер настроения ---------- */
-.moodgrid{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
-@media (max-width:1040px){.moodgrid{grid-template-columns:1fr}}
-.checkin{border:1px solid var(--hairline);border-radius:var(--r);background:var(--surface);padding:20px;box-shadow:var(--shadow-sm)}
-.checkin h3{font-size:17px}
-.checkin.done{padding:16px 18px}
-.checkin .fl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:7px}
-.moodrow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
-.moodbtn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:12px 6px;
-  border:1px solid var(--hairline);border-radius:10px;background:var(--surface-2)}
-.moodbtn:hover{border-color:var(--ink-3)}
-.moodbtn.sel{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
-.moodbtn .me{font-size:23px;line-height:1}
-.moodbtn .ml{font-size:11px;color:var(--ink-2);font-weight:500;text-align:center}
-.moodbtn:disabled{opacity:.4}
-.seg.wl{display:flex}
-.seg.wl button{flex:1}
-@media (max-width:560px){
-  .checkin{padding:15px}
-  .moodrow{gap:5px}
-  .moodbtn{padding:9px 3px}
-  .moodbtn .me{font-size:19px}
-  .moodbtn .ml{font-size:9.5px}
-  .seg.wl button{padding:7px 3px;font-size:12px}
-}
-.chips{display:flex;flex-wrap:wrap;gap:7px}
-.chip{padding:5px 11px;border:1px solid var(--hairline);border-radius:20px;background:var(--surface-2);font-size:12.5px;color:var(--ink-2)}
-.chip:hover{border-color:var(--ink-3)}
-.chip.sel{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);font-weight:500}
-.checkin textarea{width:100%;padding:9px 11px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface-2);resize:vertical}
-.checkin-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}
-.tavatar{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:10px;font-weight:600;border:2px solid var(--surface)}
-.tavatar.sm{width:24px;height:24px;flex:0 0 auto;border-width:0}
-.tavatar.ndone{background:var(--hairline);color:var(--ink-3)}
-.mrow{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--hairline-2);flex-wrap:wrap}
-.mrow:last-child{border-bottom:0}
-.spark{flex:1;min-width:110px;display:flex;justify-content:flex-end}
-.avg7{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:13px;width:34px;text-align:right}
-.mflag{font-size:11.5px;color:var(--warn);background:var(--flag-bg);border:1px solid var(--flag-edge);padding:2px 8px;border-radius:20px;white-space:nowrap}
-.dstrip{display:flex;flex-wrap:wrap;gap:3px}
-.dcell{width:12px;height:12px;border-radius:3px;flex:0 0 auto;display:inline-block}
-
 /* ---------- QR оплаты пошлин ---------- */
 .paygrid{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start}
 @media (max-width:960px){.paygrid{grid-template-columns:1fr}}
@@ -253,6 +211,23 @@ td.num{white-space:nowrap}
 @media (max-width:640px){.reqgrid{grid-template-columns:1fr}}
 .reqfield{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .reqfield input{padding:8px 10px;border:1px solid var(--hairline);border-radius:7px;background:var(--surface-2);font-size:13px;text-transform:none;letter-spacing:0;color:var(--ink)}
+/* ---------- Прайс ---------- */
+.price-cat{font-size:15px;margin:22px 0 8px;color:var(--ink)}
+.price-cat:first-of-type{margin-top:4px}
+.pricetable td{font-size:13px;vertical-align:top}
+.pricetable .pc-name{font-weight:500;max-width:420px}
+.pricetable .pc-fee,.pricetable .pc-duty,.pricetable .pc-total{color:var(--ink-2);white-space:pre-wrap;min-width:120px}
+.pricetable .pc-total{font-weight:600;color:var(--ink)}
+.pricetable .pc-act{width:60px;text-align:right;color:var(--ink-3)}
+.pricetable tr[data-pedit]{cursor:pointer}
+.pricetable tr[data-pedit]:hover .pc-edit{color:var(--accent)}
+.pricetable .pc-edit{font-size:11.5px;opacity:0}
+.pricetable tr[data-pedit]:hover .pc-edit{opacity:1}
+.pricetable tr.editing td{background:var(--surface-2)}
+.pricetable tr.editing textarea,.pricetable tr.editing input{width:100%;padding:6px 8px;border:1px solid var(--hairline);border-radius:6px;background:var(--surface);font-size:12.5px;resize:vertical}
+.pricetable tr.editing .pc-act{width:auto;display:flex;flex-direction:column;gap:5px}
+.pricetable tr.editing .pc-act .btn{padding:5px 9px;font-size:12px;justify-content:center}
+
 .amountrow{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
 .amountrow>.field{flex:0 0 auto}
 .amountrow input#pay-amount{width:180px}
@@ -402,8 +377,8 @@ const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&l
 const state = {
   me:null, users:[], byId:{},
   route:'trademarks',
-  objects:{trademark:null, patent:null},
-  reminders:null, trash:null, activity:null,
+  objects:{trademark:null, patent:null, software:null, shipment:null},
+  reminders:null, trash:null, activity:null, price:null, priceEdit:null,
   ui:{sort:{key:'holder',dir:1}, status:'', resp:'', flag:'', q:''},
   panel:null,
   bellOpen:false,
@@ -455,9 +430,11 @@ function firstName(n){ return (n||'').split(' ')[0]; }
 const ROUTES = {
   trademarks:{title:'Реестр товарных знаков', crumb:'Реестр объектов', type:'trademark'},
   patents:{title:'Реестр патентов', crumb:'Реестр объектов', type:'patent'},
+  software:{title:'Программы для ЭВМ', crumb:'Реестр объектов', type:'software'},
+  shipments:{title:'Реестр отправлений', crumb:'Реестр объектов', type:'shipment'},
   reminders:{title:'Напоминания о продлении', crumb:'Контроль сроков'},
   payments:{title:'QR для оплаты пошлин', crumb:'Инструменты'},
-  mood:{title:'Настроение команды', crumb:'Команда'},
+  price:{title:'Прайс ЭРФИС', crumb:'Инструменты'},
   trash:{title:'Корзина', crumb:'Служебное'},
   log:{title:'Журнал изменений', crumb:'Служебное'},
 };
@@ -466,7 +443,7 @@ function go(r){
   state.route = r;
   state.ui.sort = {key:'holder',dir:1};
   state.ui.status=''; state.ui.resp=''; state.ui.flag='';
-  state.moodEditing = false; state.moodForm = null;
+  state.priceEdit = null; state.payForm = null;
   history.replaceState(null,'','#/'+r);
   renderAll();
   refresh().catch(e=> toast(e.message, true));
@@ -479,26 +456,19 @@ window.addEventListener('hashchange', ()=>{
 /* ---------- data loading ---------- */
 async function loadRoute(){
   const r = state.route;
-  if(r==='trademarks') state.objects.trademark = (await api('/objects?type=trademark')).objects;
-  else if(r==='patents') state.objects.patent = (await api('/objects?type=patent')).objects;
+  const t = ROUTES[r] && ROUTES[r].type;
+  if(t) state.objects[t] = (await api('/objects?type='+t)).objects;
   else if(r==='reminders') state.reminders = (await api('/reminders')).reminders;
   else if(r==='trash') state.trash = (await api('/trash')).trash;
   else if(r==='log') state.activity = (await api('/activity?limit=400')).activity;
-  else if(r==='mood'){
-    state.moodToday = await api('/mood/today');
-    if(state.me.isManager){
-      const [team, mine] = await Promise.all([api('/mood/team?days=30'), api('/mood/mine?days=60')]);
-      state.moodTeam = team; state.moodMine = mine.entries;
-    } else { state.moodTeam = null; state.moodMine = null; }
-  }
   else if(r==='payments'){
     const [reqs, list] = await Promise.all([api('/payments/requisites'), api('/payments')]);
     state.requisites = reqs.requisites; state.payments = list.payments;
   }
+  else if(r==='price') state.price = (await api('/price')).items;
 }
 async function loadCounts(){
   try{ state.health = await api('/health'); }catch(e){}
-  try{ state.moodToday = await api('/mood/today'); }catch(e){}
 }
 async function refresh(){
   await Promise.all([loadRoute(), loadCounts()]);
@@ -513,12 +483,13 @@ function renderNav(){
     {sec:'Реестр объектов'},
     {r:'trademarks', label:'Товарные знаки', count:h.trademarks, ic:'M4 7h16M4 12h16M4 17h10'},
     {r:'patents', label:'Патенты', count:h.patents, ic:'M12 3l8 4-8 4-8-4 8-4Zm-8 9 8 4 8-4M4 16l8 4 8-4'},
+    {r:'software', label:'Программы для ЭВМ', count:h.software, ic:'M4 5h16v11H4zM2 20h20M9 16v4M15 16v4'},
+    {r:'shipments', label:'Реестр отправлений', count:h.shipments, ic:'M3 8l9-5 9 5-9 5-9-5zM3 8v8l9 5 9-5V8M12 13v8'},
     {sec:'Контроль сроков'},
     {r:'reminders', label:'Напоминания', count:dueTotal||null, flag:!!dueTotal, ic:'M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'},
     {sec:'Инструменты'},
     {r:'payments', label:'QR оплаты пошлин', ic:'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h3v3h-3zM19 14h1M19 19h1M17 19h0'},
-    {sec:'Команда'},
-    {r:'mood', label:'Настроение команды', count: (state.moodToday && !state.moodToday.entry) ? '•' : null, flag: !!(state.moodToday && !state.moodToday.entry), ic:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM9 10h.01M15 10h.01M8.5 15a4 4 0 0 0 7 0'},
+    {r:'price', label:'Прайс ЭРФИС', count:h.price||null, ic:'M7 7h.01M3 5a2 2 0 0 1 2-2h6l10 10-8 8L3 11z'},
     {sec:'Служебное'},
     {r:'trash', label:'Корзина', count:h.trash||null, ic:'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13'},
     {r:'log', label:'Журнал изменений', ic:'M8 6h11M8 12h11M8 18h11M3.5 6h.01M3.5 12h.01M3.5 18h.01'},
@@ -537,34 +508,42 @@ function renderNav(){
 }
 
 /* ---------- registry view ---------- */
-const TM_COLS = [
-  {key:'flag', label:'', w:'20px', sort:false},
-  {key:'name', label:'Название объекта', cls:'name'},
-  {key:'holder', label:'Правообладатель', cls:'holder'},
-  {key:'regNumber', label:'№ регистрации', cls:'mono num'},
-  {key:'mktuClasses', label:'Классы МКТУ', cls:'mono'},
-  {key:'priorityDate', label:'Приоритет', cls:'mono num'},
-  {key:'expiryDate', label:'Действует до', cls:'mono num'},
-  {key:'_status', label:'Статус'},
-  {key:'responsible', label:'Ответственный'},
-];
-const PT_COLS = [
-  {key:'flag', label:'', w:'20px', sort:false},
-  {key:'name', label:'Название объекта', cls:'name'},
-  {key:'objectType', label:'Вид'},
-  {key:'holder', label:'Правообладатель', cls:'holder'},
-  {key:'regNumber', label:'№ патента', cls:'mono num'},
-  {key:'priorityDate', label:'Приоритет', cls:'mono num'},
-  {key:'expiryDate', label:'Действует до', cls:'mono num'},
-  {key:'_status', label:'Статус'},
-  {key:'responsible', label:'Ответственный'},
-];
+const FLAG_COL = {key:'flag', label:'', w:'20px', sort:false};
+const RESP_COL = {key:'responsible', label:'Ответственный'};
+const REG = {
+  trademark: {
+    label:'Товарный знак', add:'Добавить товарный знак', title1:'Название объекта', holderReq:true,
+    cols:[FLAG_COL, {key:'name',label:'Название объекта',cls:'name'}, {key:'holder',label:'Правообладатель',cls:'holder'},
+      {key:'regNumber',label:'№ регистрации',cls:'mono num'}, {key:'mktuClasses',label:'Классы МКТУ',cls:'mono'},
+      {key:'priorityDate',label:'Приоритет',cls:'mono num'}, {key:'expiryDate',label:'Действует до',cls:'mono num'},
+      {key:'_status',label:'Статус'}, RESP_COL],
+  },
+  patent: {
+    label:'Патент', add:'Добавить патент', title1:'Название объекта', holderReq:true,
+    cols:[FLAG_COL, {key:'name',label:'Название объекта',cls:'name'}, {key:'objectType',label:'Вид'},
+      {key:'holder',label:'Правообладатель',cls:'holder'}, {key:'regNumber',label:'№ патента',cls:'mono num'},
+      {key:'priorityDate',label:'Приоритет',cls:'mono num'}, {key:'expiryDate',label:'Действует до',cls:'mono num'},
+      {key:'_status',label:'Статус'}, RESP_COL],
+  },
+  software: {
+    label:'Программа для ЭВМ', add:'Добавить программу', title1:'Название программы', noStatus:true,
+    cols:[FLAG_COL, {key:'name',label:'Название',cls:'name'}, {key:'intNo',label:'Вн. №',cls:'mono'},
+      {key:'regNumber',label:'№ регистрации',cls:'mono'}, {key:'holder',label:'Правообладатель',cls:'holder'},
+      {key:'registry',label:'Реестр'}, {key:'contactPerson',label:'Контактное лицо'},
+      {key:'actWhen',label:'Когда обратиться'}, RESP_COL],
+  },
+  shipment: {
+    label:'Отправление', add:'Добавить отправление', title1:'Вид документа', noStatus:true, noHolder:true,
+    cols:[FLAG_COL, {key:'priorityDate',label:'Дата',cls:'mono num'}, {key:'name',label:'Вид документа',cls:'name'},
+      {key:'regNumber',label:'№ объекта',cls:'mono'}, {key:'appNumber',label:'№ делопроизводства',cls:'mono'}, RESP_COL],
+  },
+};
 const STATUS_RANK = {expired:0, expiring:1, active:2, none:3};
 
 function applyView(list){
   let rows = list.slice();
   const q = state.ui.q.trim().toLowerCase();
-  if(q) rows = rows.filter(it => [it.name,it.holder,it.regNumber,it.appNumber,it.mktuClasses]
+  if(q) rows = rows.filter(it => [it.name,it.holder,it.regNumber,it.appNumber,it.mktuClasses,it.intNo,it.contactPerson,it.email,it.registry]
       .some(v => v && String(v).toLowerCase().includes(q)));
   if(state.ui.status) rows = rows.filter(it => it.status.key===state.ui.status);
   if(state.ui.resp==='_none') rows = rows.filter(it => !it.responsible);
@@ -607,7 +586,8 @@ function rowHtml(it, cols){
 
 function renderRegistry(){
   const type = ROUTES[state.route].type;
-  const cols = type==='patent' ? PT_COLS : TM_COLS;
+  const cfg = REG[type];
+  const cols = cfg.cols;
   const list = state.objects[type];
   if(!list){ $('#view').innerHTML = '<div class="pageloader">Загрузка…</div>'; return; }
   const rows = applyView(list);
@@ -616,7 +596,7 @@ function renderRegistry(){
 
   $('#view').innerHTML = `
     <div class="toolbar">
-      <div class="chipfilter">Статус
+      ${cfg.noStatus ? '' : `<div class="chipfilter">Статус
         <select id="f-status">
           <option value="">все</option>
           <option value="active">действует</option>
@@ -624,11 +604,11 @@ function renderRegistry(){
           <option value="expired">истёк</option>
           <option value="none">без срока</option>
         </select>
-      </div>
+      </div>`}
       <div class="chipfilter"><select id="f-resp">${respOpts}</select></div>
       <div class="seg" role="group" aria-label="Требуют внимания">
         <button data-flag="" aria-pressed="${state.ui.flag===''}">Все</button>
-        <button data-flag="1" aria-pressed="${state.ui.flag==='1'}">Требуют внимания</button>
+        <button data-flag="1" aria-pressed="${state.ui.flag==='1'}">С напоминанием</button>
       </div>
       <span class="spacer"></span>
       <span class="count-note">${rows.length} из ${list.length}</span>
@@ -638,7 +618,7 @@ function renderRegistry(){
       </button>
       <button class="btn primary" id="addbtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-        Добавить объект
+        ${cfg.add}
       </button>
     </div>
     <div class="tablewrap">
@@ -649,7 +629,7 @@ function renderRegistry(){
       </table>
     </div>`;
 
-  const sc=$('#f-status'); sc.value=state.ui.status; sc.onchange=e=>{state.ui.status=e.target.value; renderRegistry();};
+  const sc=$('#f-status'); if(sc){ sc.value=state.ui.status; sc.onchange=e=>{state.ui.status=e.target.value; renderRegistry();}; }
   const rc=$('#f-resp'); rc.value=state.ui.resp; rc.onchange=e=>{state.ui.resp=e.target.value; renderRegistry();};
   document.querySelectorAll('.seg [data-flag]').forEach(b=> b.onclick=()=>{state.ui.flag=b.dataset.flag; renderRegistry();});
   document.querySelectorAll('th.sortable').forEach(th=> th.onclick=()=>{
@@ -677,9 +657,13 @@ function openCreate(type){
   renderPanel();
 }
 function blankDraft(type){
-  const b = {holder:'', name:'', appNumber:'', priorityDate:'', expiryDate:'', responsible:state.me.id, notes:'', documentRef:''};
-  return type==='patent' ? {...b, objectType:'ИЗ', regNumber:''} : {...b, regNumber:'', mktuClasses:''};
+  const b = {name:'', responsible:state.me.id, notes:'', holder:'', appNumber:'', regNumber:'', priorityDate:'', expiryDate:'', documentRef:'', objectType:'', mktuClasses:'', intNo:'', contactPerson:'', email:'', registry:'', actWhen:''};
+  if(type==='patent') b.objectType = 'ИЗ';
+  if(type==='software') b.registry = 'Роспатент';
+  if(type==='shipment') b.priorityDate = new Date().toISOString().slice(0,10);
+  return b;
 }
+const DRAFT_KEYS = ['holder','name','appNumber','regNumber','objectType','mktuClasses','priorityDate','expiryDate','documentRef','notes','intNo','contactPerson','email','registry','actWhen'];
 function closePanel(){
   state.panel = null;
   $('#scrim').classList.remove('open');
@@ -693,6 +677,34 @@ function recommendedDate(o){
   return rec < new Date() ? new Date(Date.now()+DAY).toISOString().slice(0,10) : rec.toISOString().slice(0,10);
 }
 
+function panelBody(type, f){
+  const g2 = (a,b)=>`<div class="grid2">${a}${b}</div>`;
+  if(type==='patent') return [
+    f('Название объекта','name'), f('Правообладатель','holder'),
+    f('Вид объекта','objectType',{type:'select',options:Object.entries(OTYPE).map(([k,v])=>[k,`${k} — ${v}`])}),
+    f('№ заявки','appNumber',{mono:true}), f('№ патента','regNumber',{mono:true}),
+    g2(f('Дата приоритета','priorityDate',{type:'date',mono:true,fmt:true}), f('Действует до','expiryDate',{type:'date',mono:true,fmt:true})),
+  ].join('');
+  if(type==='software') return [
+    f('Название программы','name'), f('Внутренний №','intNo',{mono:true}), f('Правообладатель','holder'),
+    f('Реестр','registry',{type:'select',options:[['','—'],['Роспатент','Роспатент'],['Минцифры','Минцифры']]}),
+    f('№ регистрации / свидетельства','regNumber',{mono:true}),
+    g2(f('Контактное лицо','contactPerson'), f('E-mail','email')),
+    f('Когда надо обратиться','actWhen',{ph:'напр. с 01.01.2027 по 01.05.2027'}),
+  ].join('');
+  if(type==='shipment') return [
+    f('Дата отправки','priorityDate',{type:'date',mono:true,fmt:true}),
+    f('Вид документа','name',{type:'textarea'}),
+    g2(f('Номер объекта','regNumber',{mono:true}), f('№ делопроизводства','appNumber',{mono:true})),
+  ].join('');
+  return [ // trademark
+    f('Название объекта','name'), f('Правообладатель','holder'),
+    f('№ заявки','appNumber',{mono:true}), f('№ регистрации','regNumber',{mono:true}),
+    f('Классы МКТУ','mktuClasses',{mono:true,ph:'напр. 9, 35, 42'}),
+    g2(f('Дата приоритета','priorityDate',{type:'date',mono:true,fmt:true}), f('Действует до','expiryDate',{type:'date',mono:true,fmt:true})),
+  ].join('');
+}
+
 function renderPanel(){
   const p=$('#panel'), sc=$('#scrim');
   const ps = state.panel;
@@ -702,12 +714,12 @@ function renderPanel(){
 
   const editing = ps.mode!=='view';
   const type = ps.mode==='create' ? ps.type : (ps.obj?ps.obj.type:'trademark');
-  const isPt = type==='patent';
+  const hasDoc = type==='trademark' || type==='patent';
   const src = editing ? ps.draft : ps.obj;
 
   if(!src){ p.innerHTML = `<header><div><div class="eyebrow">Объект</div><h2>Загрузка…</h2></div><button class="close" id="pclose">✕</button></header><div class="body"></div>`; p.querySelector('#pclose').onclick=closePanel; return; }
 
-  const st = ps.mode!=='create' && ps.obj ? ps.obj.status : null;
+  const st = (ps.mode!=='create' && ps.obj && !REG[type].noStatus) ? ps.obj.status : null;
   const f = (label,key,opts={})=>{
     const v = src[key]||'';
     if(!editing) return `<div class="field"><label>${label}</label><div class="val ${opts.mono?'mono':''}">${opts.fmt?fmt(v):(esc(v)||'—')}</div></div>`;
@@ -761,25 +773,16 @@ function renderPanel(){
   p.innerHTML = `
     <header>
       <div>
-        <div class="eyebrow">${isPt?'Патент':'Товарный знак'}${st?` · <span style="color:var(--${st.key==='active'?'ok':st.key==='expired'?'crit':'warn'})">${esc(st.label)}</span>`:''}</div>
-        <h2>${ps.mode==='create' ? 'Новый объект' : esc(src.name||'Без названия')}</h2>
+        <div class="eyebrow">${esc(REG[type].label)}${st?` · <span style="color:var(--${st.key==='active'?'ok':st.key==='expired'?'crit':'warn'})">${esc(st.label)}</span>`:''}</div>
+        <h2>${ps.mode==='create' ? ('Новое: '+REG[type].label.toLowerCase()) : esc(src.name||'Без названия')}</h2>
       </div>
       <button class="close" id="pclose" aria-label="Закрыть">✕</button>
     </header>
     <div class="body">
-      ${f('Название объекта','name')}
-      ${f('Правообладатель','holder')}
-      ${isPt ? f('Вид объекта','objectType',{type:'select',options:Object.entries(OTYPE).map(([k,v])=>[k,`${k} — ${v}`])}) : ''}
-      ${f('№ заявки','appNumber',{mono:true})}
-      ${f(isPt?'№ патента':'№ регистрации','regNumber',{mono:true})}
-      ${!isPt ? f('Классы МКТУ','mktuClasses',{mono:true,ph:'напр. 9, 35, 42'}) : ''}
-      <div class="grid2">
-        ${f('Дата приоритета','priorityDate',{type:'date',mono:true,fmt:true})}
-        ${f('Действует до','expiryDate',{type:'date',mono:true,fmt:true})}
-      </div>
+      ${panelBody(type, f)}
       ${respField}
       ${f('Примечание','notes',{type:'textarea'})}
-      ${docField}
+      ${hasDoc ? docField : ''}
       ${editing ? '' : reminderHtml}
       ${editing ? '' : `<div class="field"><label>История по объекту</label>${actList}</div>`}
     </div>
@@ -810,16 +813,17 @@ function renderPanel(){
   if(q('#rem-del')) q('#rem-del').onclick = ()=> doReminder('DELETE', ps.obj.id);
 }
 function draftFrom(o){
-  const d = {holder:o.holder,name:o.name,appNumber:o.appNumber,regNumber:o.regNumber,priorityDate:o.priorityDate||'',expiryDate:o.expiryDate||'',responsible:o.responsible||'',notes:o.notes||'',documentRef:o.documentRef||''};
-  if(o.type==='patent') d.objectType = o.objectType||'ИЗ';
-  else d.mktuClasses = o.mktuClasses||'';
+  const d = {responsible:o.responsible||''};
+  DRAFT_KEYS.forEach(k=> d[k] = o[k]||'');
   return d;
 }
 
 async function savePanel(){
   const ps = state.panel;
   const d = ps.draft;
-  if(!String(d.name||'').trim() || !String(d.holder||'').trim()){ toast('Заполните название и правообладателя', true); return; }
+  const type = ps.mode==='create' ? ps.type : ps.obj.type;
+  if(!String(d.name||'').trim()){ toast('Заполните название', true); return; }
+  if(REG[type].holderReq && !String(d.holder||'').trim()){ toast('Заполните правообладателя', true); return; }
   ps.busy = true; renderPanel();
   try{
     if(ps.mode==='create'){
@@ -884,185 +888,6 @@ function renderReminders(){
     ${items.length ? block('Активные — требуют действия', due)+block('Запланированы', planned)
       : `<div class="listcard"><div class="empty"><h3>Активных напоминаний нет</h3>Задайте напоминание в карточке объекта.</div></div>`}`;
   document.querySelectorAll('.lrow[data-id]').forEach(r=> r.onclick=()=> openDetail(r.dataset.id));
-}
-
-/* ---------- трекер настроения ---------- */
-const MOOD_EMOJI = {1:'😔',2:'😕',3:'😐',4:'🙂',5:'😄'};
-const MOOD_LABEL = {1:'Тяжёлый',2:'Трудный',3:'Обычный',4:'Хороший',5:'Отличный'};
-const WORKLOAD_LABEL = {low:'Недогруз', ok:'В норме', high:'Завал'};
-function moodColor(m){ return m==null?'var(--hairline)':['','var(--crit)','var(--warn)','var(--ink-3)','#3E9E73','var(--ok)'][m]; }
-function ruDate(d){ const p=String(d).split('-'); return p.length===3?`${+p[2]}.${p[1]}`:d; }
-
-function moodSparkline(recent){
-  const w=150, h=34, n=recent.length, step=w/(n-1);
-  let path='', dots='';
-  recent.forEach((r,i)=>{
-    const x=i*step;
-    if(r.mood==null){ if(r.worked===false) dots+=`<circle cx="${x.toFixed(1)}" cy="${h-2}" r="1.6" fill="var(--ink-3)" opacity=".4"/>`; return; }
-    const y=(h-4) - ((r.mood-1)/4)*(h-8) + 2;
-    path += (path?'L':'M')+x.toFixed(1)+' '+y.toFixed(1)+' ';
-    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.2" fill="${moodColor(r.mood)}"/>`;
-  });
-  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="overflow:visible">
-    <path d="${path}" fill="none" stroke="var(--ink-3)" stroke-width="1.4" stroke-linecap="round" opacity=".55"/>${dots}</svg>`;
-}
-
-function moodTeamChart(series){
-  const W=680, H=170, padL=26, padR=12, padT=12, padB=22;
-  const iw=W-padL-padR, ih=H-padT-padB, n=series.length;
-  const x = i => padL + (n<=1?0:i*(iw/(n-1)));
-  const y = v => padT + ih - ((v-1)/4)*ih;
-  const pts = series.map((s,i)=> s.avg==null?null:[x(i), y(s.avg)]);
-  let line='', area='';
-  let started=false, firstX=0, lastX=0;
-  pts.forEach((p,i)=>{ if(!p){ started=false; return; }
-    if(!started){ line+=`M${p[0].toFixed(1)} ${p[1].toFixed(1)} `; if(area==='') firstX=p[0]; started=true; }
-    else line+=`L${p[0].toFixed(1)} ${p[1].toFixed(1)} `;
-    lastX=p[0]; area+=(area?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)+' ';
-  });
-  const areaClosed = area ? area+`L${lastX.toFixed(1)} ${(padT+ih).toFixed(1)} L${firstX.toFixed(1)} ${(padT+ih).toFixed(1)} Z` : '';
-  const grid = [1,2,3,4,5].map(v=>`
-    <line x1="${padL}" y1="${y(v).toFixed(1)}" x2="${W-padR}" y2="${y(v).toFixed(1)}" stroke="var(--hairline)" stroke-width="1" ${v===1?'':'stroke-dasharray="2 3"'}/>
-    <text x="${padL-6}" y="${(y(v)+3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--ink-3)">${v}</text>`).join('');
-  const xlabels = series.map((s,i)=> (i%Math.ceil(n/6)===0 || i===n-1) ? `<text x="${x(i).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9" fill="var(--ink-3)">${ruDate(s.date)}</text>`:'').join('');
-  const last = [...pts].reverse().find(Boolean);
-  const endDot = last ? `<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="3.5" fill="var(--accent)"/>` : '';
-  return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:420px;display:block">
-    ${grid}${xlabels}
-    ${areaClosed?`<path d="${areaClosed}" fill="var(--accent)" opacity=".08"/>`:''}
-    <path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-    ${endDot}
-  </svg></div>`;
-}
-
-function moodForm(){
-  const f = state.moodForm;
-  const moodBtns = [1,2,3,4,5].map(m=>`
-    <button class="moodbtn ${f.mood===m?'sel':''}" data-mood="${m}">
-      <span class="me">${MOOD_EMOJI[m]}</span><span class="ml">${MOOD_LABEL[m]}</span></button>`).join('');
-  const wlBtns = ['low','ok','high'].map(k=>`<button data-wl="${k}" aria-pressed="${f.workload===k}">${WORKLOAD_LABEL[k]}</button>`).join('');
-  const chips = (state.moodToday.factors||[]).map(x=>`<button class="chip ${f.factors.includes(x)?'sel':''}" data-factor="${esc(x)}">${esc(x)}</button>`).join('');
-  return `<div class="checkin">
-    <h3>Как прошёл рабочий день${state.moodToday?.date?`, ${ruDate(state.moodToday.date)}`:''}?</h3>
-    <p class="hint" style="margin:2px 0 14px">Одна отметка в день. Это не оценка работы — данные помогают вовремя заметить перегрузку. Отметки видит только руководитель.</p>
-    <div class="moodrow">${moodBtns}</div>
-    <div style="margin-top:16px"><div class="fl">Нагрузка сегодня</div><div class="seg wl">${wlBtns}</div></div>
-    <div style="margin-top:16px"><div class="fl">Что повлияло на день? <span style="color:var(--ink-3);font-weight:400">— по желанию</span></div><div class="chips">${chips}</div></div>
-    <div style="margin-top:14px"><div class="fl">Пара слов <span style="color:var(--ink-3);font-weight:400">— по желанию</span></div>
-      <textarea id="mood-note" rows="2" placeholder="Например: закрыли крупную заявку; или — завал из-за срочных правок">${esc(f.note||'')}</textarea></div>
-    <div class="checkin-actions">
-      <button class="btn primary" id="mood-save">Сохранить отметку</button>
-      ${state.moodEditing?`<button class="btn" id="mood-cancel">Отмена</button>`:''}
-    </div>
-  </div>`;
-}
-
-function renderMood(){
-  const today = state.moodToday;
-  if(!today){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
-  const entry = today.entry;
-  const editing = state.moodEditing || !entry;
-  if(!state.moodForm) state.moodForm = entry
-    ? {mood:entry.mood, workload:entry.workload, factors:entry.factors.slice(), note:entry.note, worked:true}
-    : {mood:null, workload:'ok', factors:[], note:'', worked:true};
-
-  const summary = entry ? `<div class="checkin done">
-      <div style="display:flex;align-items:center;gap:14px">
-        <span style="font-size:32px">${MOOD_EMOJI[entry.mood]}</span>
-        <div><div style="font-weight:600">День отмечен как «${MOOD_LABEL[entry.mood]}»</div>
-        <div class="hint">Нагрузка: ${WORKLOAD_LABEL[entry.workload]}${entry.factors.length?' · '+entry.factors.join(', '):''}</div></div>
-        <button class="btn" id="mood-edit" style="margin-left:auto">Изменить</button>
-      </div>
-    </div>` : '';
-
-  // сотрудник (не руководитель) видит только свою отметку за сегодня
-  if(!state.me.isManager){
-    $('#view').innerHTML = `<div style="max-width:620px">
-      ${editing ? moodForm() : summary}
-      <div class="hint" style="margin-top:16px;line-height:1.5">Спасибо, что отмечаетесь. Историю и статистику видит только руководитель — это нужно, чтобы никто не выгорал. Свои прошлые отметки вы не видите: важна только сегодняшняя.</div>
-    </div>`;
-    wireMoodForm();
-    return;
-  }
-
-  const t = state.moodTeam, mine = state.moodMine;
-  if(!t){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
-  const p = t.participationToday;
-  const memberDot = m => `<span class="tavatar ${m.todayDone?'':'ndone'}" title="${esc(m.name)}${m.todayDone?' — отметился':' — ещё не отметился'}" style="${m.todayDone&&m.today?.worked?`background:${moodColor(m.today.mood)}`:''}">${esc(m.initials)}</span>`;
-
-  const memberRow = m => `<div class="mrow">
-      <span class="tavatar sm" style="${m.today&&m.today.worked?`background:${moodColor(m.today.mood)}`:''}">${esc(m.initials)}</span>
-      <div style="min-width:120px"><div style="font-weight:500">${esc(m.name)}</div>
-        <div class="hint">${m.todayDone?(m.today.worked?MOOD_LABEL[m.today.mood]+' сегодня':'выходной'):'сегодня не отмечался'}</div></div>
-      <div class="spark">${moodSparkline(m.recent)}</div>
-      <div class="avg7" title="средняя за 7 дней">${m.avg7!=null?m.avg7:'—'}</div>
-      ${m.signal.flag?`<div class="mflag" title="${esc(m.signal.reasons.join('; '))}">⚠︎ стоит поговорить</div>`:'<div></div>'}
-    </div>`;
-
-  const myStrip = (mine||[]).slice(-56).map(e=>`<span class="dcell" title="${ruDate(e.date)}${e.worked?': '+MOOD_LABEL[e.mood]:': выходной'}" style="background:${e.worked?moodColor(e.mood):'var(--hairline-2)'}"></span>`).join('');
-
-  $('#view').innerHTML = `
-    <div class="moodgrid">
-      <div>
-        ${editing ? moodForm() : summary}
-        <div class="listcard" style="margin-top:18px">
-          <div style="padding:14px 16px;border-bottom:1px solid var(--hairline-2);display:flex;align-items:center;gap:10px">
-            <strong style="font-family:inherit">Команда</strong>
-            <span class="hint">отметились сегодня: ${p.done} из ${p.total}${t.teamAvg7!=null?` · средняя за неделю ${t.teamAvg7}`:''}</span>
-            <span style="margin-left:auto;display:flex;gap:5px">${t.members.map(memberDot).join('')}</span>
-          </div>
-          <div style="padding:14px 16px 6px">${moodTeamChart(t.series)}</div>
-          <div style="padding:4px 16px 8px">${t.members.map(memberRow).join('')}</div>
-        </div>
-      </div>
-      <div>
-        <div class="listcard" style="padding:14px 16px">
-          <strong style="font-family:inherit">Ваши отметки</strong>
-          <div class="hint" style="margin:3px 0 10px">последние 8 недель</div>
-          <div class="dstrip">${myStrip||'<span class="hint">пока нет отметок</span>'}</div>
-          <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-            ${[1,2,3,4,5].map(m=>`<span class="hint" style="display:flex;align-items:center;gap:4px"><span class="dcell" style="background:${moodColor(m)}"></span>${MOOD_LABEL[m]}</span>`).join('')}
-          </div>
-        </div>
-        <button class="btn" id="mood-export" style="margin-top:12px;width:100%">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-          Выгрузить всё в .csv
-        </button>
-        <div class="hint" style="margin-top:14px;line-height:1.5">
-          Что смотреть при оценке выгорания: устойчивый спад средней, «завал» несколько дней подряд,
-          серия тяжёлых дней у одного человека, повторяющиеся факторы (переработки, сжатые сроки).
-          Флаг «стоит поговорить» ставится автоматически по этим признакам.
-        </div>
-      </div>
-    </div>`;
-
-  if($('#view #mood-export')) $('#view #mood-export').onclick = ()=> window.open('/api/mood/export','_blank');
-  wireMoodForm();
-}
-
-function wireMoodForm(){
-  const q = s=>$('#view '+s);
-  if(q('#mood-edit')) q('#mood-edit').onclick = ()=>{ state.moodEditing=true; renderMood(); };
-  if(q('#mood-cancel')) q('#mood-cancel').onclick = ()=>{ state.moodEditing=false; state.moodForm=null; renderMood(); };
-  document.querySelectorAll('#view [data-mood]').forEach(b=> b.onclick=()=>{ state.moodForm.mood=+b.dataset.mood; renderMood(); });
-  document.querySelectorAll('#view [data-wl]').forEach(b=> b.onclick=()=>{ state.moodForm.workload=b.dataset.wl; renderMood(); });
-  document.querySelectorAll('#view [data-factor]').forEach(b=> b.onclick=()=>{
-    const f=b.dataset.factor, a=state.moodForm.factors, i=a.indexOf(f);
-    if(i<0) a.push(f); else a.splice(i,1); renderMood();
-  });
-  if(q('#mood-note')) q('#mood-note').oninput = e=>{ state.moodForm.note=e.target.value; };
-  if(q('#mood-save')) q('#mood-save').onclick = saveMood;
-}
-
-async function saveMood(){
-  const f = state.moodForm;
-  if(!f.mood){ toast('Оцените, как прошёл день', true); return; }
-  try{
-    await api('/mood', {method:'POST', body:jbody({mood:f.mood, workload:f.workload, factors:f.factors, note:f.note})});
-    toast('Спасибо, отметка сохранена');
-    state.moodEditing=false; state.moodForm=null;
-    await refresh();
-  }catch(e){ toast(e.message, true); }
 }
 
 /* ---------- QR для оплаты пошлин ---------- */
@@ -1239,6 +1064,79 @@ function updateQrPane(){
   };
 }
 
+/* ---------- Прайс ЭРФИС ---------- */
+function renderPrice(){
+  const items = state.price;
+  if(!items){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
+  const editId = state.priceEdit;
+  const cats = [];
+  items.forEach(it=>{ const c = it.category || 'Прочее'; if(!cats.includes(c)) cats.push(c); });
+
+  const cell = (it,k)=> editId===it.id
+    ? `<td><textarea data-pe="${k}" rows="2">${esc(it[k]||'')}</textarea></td>`
+    : `<td class="pc-${k}">${esc(it[k]||'—')}</td>`;
+
+  const rowHtml = it=> editId===it.id ? `
+    <tr class="editing">
+      <td><textarea data-pe="name" rows="2">${esc(it.name)}</textarea>
+        <input data-pe="category" value="${esc(it.category||'')}" placeholder="Категория" style="margin-top:6px"/></td>
+      ${cell(it,'fee')}${cell(it,'duty')}${cell(it,'total')}
+      <td class="pc-act">
+        <button class="btn primary" data-psave="${it.id}">Сохранить</button>
+        <button class="btn" data-pcancel="1">Отмена</button>
+        <button class="btn danger" data-pdel="${it.id}">Удалить</button>
+      </td>
+    </tr>` : `
+    <tr data-pedit="${it.id}">
+      <td class="pc-name">${esc(it.name)}</td>
+      <td class="pc-fee">${esc(it.fee||'—')}</td>
+      <td class="pc-duty">${esc(it.duty||'—')}</td>
+      <td class="pc-total">${esc(it.total||'—')}</td>
+      <td class="pc-act"><span class="pc-edit">изменить</span></td>
+    </tr>`;
+
+  $('#view').innerHTML = `
+    <div class="demoline">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7h.01M3 5a2 2 0 0 1 2-2h6l10 10-8 8L3 11z"/></svg>
+      Перечень услуг ООО «ЭРФИС», 2026 г. Нажмите на строку, чтобы изменить стоимость. Изменения сохраняются для всех и попадают в журнал.
+    </div>
+    <div class="toolbar">
+      <span class="count-note">${items.length} услуг</span>
+      <span class="spacer"></span>
+      <button class="btn" id="price-export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Выгрузить .csv</button>
+      <button class="btn primary" id="price-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Добавить услугу</button>
+    </div>
+    ${cats.map(c=>`
+      <h3 class="price-cat">${esc(c)}</h3>
+      <div class="tablewrap">
+        <table class="pricetable">
+          <thead><tr><th>Наименование работы</th><th>Гонорар, ₽</th><th>Пошлина, ₽</th><th>Всего, ₽</th><th></th></tr></thead>
+          <tbody>${items.filter(i=>(i.category||'Прочее')===c).map(rowHtml).join('')}</tbody>
+        </table>
+      </div>`).join('')}`;
+
+  $('#view #price-export').onclick = ()=> window.open('/api/price/export','_blank');
+  $('#view #price-add').onclick = async ()=>{
+    try{ const r = await api('/price',{method:'POST', body:jbody({category:cats[0]||'', name:'Новая услуга', fee:'', duty:'', total:''})});
+      state.priceEdit = r.id; await loadRoute(); renderPrice();
+    }catch(e){ toast(e.message,true); }
+  };
+  document.querySelectorAll('#view [data-pedit]').forEach(tr=> tr.onclick=()=>{ state.priceEdit = +tr.dataset.pedit; renderPrice(); });
+  const pc = $('#view [data-pcancel]'); if(pc) pc.onclick = ()=>{ state.priceEdit = null; renderPrice(); };
+  const ps = $('#view [data-psave]'); if(ps) ps.onclick = async ()=>{
+    const patch = {};
+    document.querySelectorAll('#view [data-pe]').forEach(el=> patch[el.dataset.pe] = el.value);
+    try{ await api('/price/'+ps.dataset.psave,{method:'PATCH', body:jbody(patch)});
+      state.priceEdit = null; toast('Сохранено'); await loadRoute(); renderPrice();
+    }catch(e){ toast(e.message,true); }
+  };
+  const pd = $('#view [data-pdel]'); if(pd) pd.onclick = async ()=>{
+    if(!confirm('Удалить услугу из прайса?')) return;
+    try{ await api('/price/'+pd.dataset.pdel,{method:'DELETE'}); state.priceEdit=null; await loadRoute(); renderPrice(); }
+    catch(e){ toast(e.message,true); }
+  };
+}
+
 function renderTrash(){
   const t = state.trash;
   if(!t){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
@@ -1305,10 +1203,10 @@ function renderAll(){
   $('#crumb').textContent = r.crumb;
   renderNav();
   renderBell();
-  if(state.route==='trademarks'||state.route==='patents') renderRegistry();
+  if(ROUTES[state.route] && ROUTES[state.route].type) renderRegistry();
   else if(state.route==='reminders') renderReminders();
   else if(state.route==='payments') renderPayments();
-  else if(state.route==='mood') renderMood();
+  else if(state.route==='price') renderPrice();
   else if(state.route==='trash') renderTrash();
   else if(state.route==='log') renderLog();
 }
@@ -1398,7 +1296,7 @@ document.addEventListener('click', e=>{
 });
 $('#search').addEventListener('input', e=>{
   state.ui.q = e.target.value;
-  if(state.route==='trademarks'||state.route==='patents') renderRegistry();
+  if(ROUTES[state.route] && ROUTES[state.route].type) renderRegistry();
 });
 $('#menutoggle').onclick = ()=> $('#side').classList.toggle('open');
 $('#nav').addEventListener('click', e=>{

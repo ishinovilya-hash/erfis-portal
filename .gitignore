@@ -2,8 +2,8 @@ node_modules/
 server/data/*.db
 server/data/*.db-shm
 server/data/*.db-wal
-server/data/seed.json
 server/data/initial-passwords.txt
+server/data/tunnel-url
 server/data/_logo.json
 *.log
 .DS_Store

@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS objects (
   responsible TEXT,
   notes TEXT NOT NULL DEFAULT '',
   reminder TEXT,
+  extra TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   deleted_at TEXT,
@@ -75,6 +76,18 @@ CREATE TABLE IF NOT EXISTS mood_entries (
   UNIQUE(user_id, date)
 );
 CREATE INDEX IF NOT EXISTS idx_mood_date ON mood_entries(date);
+CREATE TABLE IF NOT EXISTS price_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  category TEXT NOT NULL DEFAULT '',
+  name TEXT NOT NULL DEFAULT '',
+  fee TEXT NOT NULL DEFAULT '',
+  duty TEXT NOT NULL DEFAULT '',
+  total TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  sort INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT,
+  updated_by TEXT
+);
 CREATE TABLE IF NOT EXISTS payments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   amount_kopecks INTEGER NOT NULL,
@@ -91,6 +104,9 @@ CREATE TABLE IF NOT EXISTS payments (
 const tableCols = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
 if (!tableCols('users').includes('is_manager')) {
   db.exec('ALTER TABLE users ADD COLUMN is_manager INTEGER NOT NULL DEFAULT 0');
+}
+if (!tableCols('objects').includes('extra')) {
+  db.exec("ALTER TABLE objects ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'");
 }
 
 // ---------- password helpers (scrypt, no native deps) ----------
@@ -162,36 +178,51 @@ export function importSeedIfEmpty() {
   const now = new Date().toISOString();
 
   const ins = db.prepare(`INSERT INTO objects
-    (id,type,holder,name,app_number,reg_number,object_type,mktu_classes,priority_date,expiry_date,document_ref,document_url,responsible,notes,reminder,created_at,updated_at)
-    VALUES (@id,@type,@holder,@name,@app_number,@reg_number,@object_type,@mktu_classes,@priority_date,@expiry_date,@document_ref,@document_url,NULL,'',NULL,@now,@now)`);
+    (id,type,holder,name,app_number,reg_number,object_type,mktu_classes,priority_date,expiry_date,document_ref,document_url,responsible,notes,reminder,extra,created_at,updated_at)
+    VALUES (@id,@type,@holder,@name,@app_number,@reg_number,@object_type,@mktu_classes,@priority_date,@expiry_date,@document_ref,@document_url,NULL,'',NULL,@extra,@now,@now)`);
 
   const s = (v) => (v == null ? '' : String(v).trim());
+  const blank = { holder: '', name: '', app_number: '', reg_number: '', object_type: '', mktu_classes: '', priority_date: '', expiry_date: '', document_ref: '', document_url: '', extra: '{}' };
   let n = 0;
   db.exec('BEGIN');
   try {
     for (const t of raw.trademarks || []) {
-      ins.run({
-        id: t.id, type: 'trademark', holder: s(t.holder), name: s(t.name),
-        app_number: s(t.appNumber), reg_number: s(t.regNumber), object_type: '',
+      ins.run({ ...blank, id: t.id, type: 'trademark', holder: s(t.holder), name: s(t.name),
+        app_number: s(t.appNumber), reg_number: s(t.regNumber),
         mktu_classes: s(t.mktuClasses), priority_date: s(t.priorityDate), expiry_date: s(t.expiryDate),
-        document_ref: s(t.certificate), document_url: '', now,
-      });
+        document_ref: s(t.certificate), now });
       n++;
     }
     for (const p of raw.patents || []) {
-      ins.run({
-        id: p.id, type: 'patent', holder: s(p.holder), name: s(p.name),
+      ins.run({ ...blank, id: p.id, type: 'patent', holder: s(p.holder), name: s(p.name),
         app_number: s(p.appNumber), reg_number: s(p.patentNumber), object_type: s(p.objectType),
-        mktu_classes: '', priority_date: s(p.priorityDate), expiry_date: s(p.expiryDate),
-        document_ref: s(p.patentFile), document_url: '', now,
-      });
+        priority_date: s(p.priorityDate), expiry_date: s(p.expiryDate), document_ref: s(p.patentFile), now });
       n++;
+    }
+    for (const w of raw.software || []) {
+      ins.run({ ...blank, id: w.id, type: 'software', holder: s(w.holder), name: s(w.name),
+        reg_number: s(w.regNumber),
+        extra: JSON.stringify({ intNo: s(w.intNo), contactPerson: s(w.contactPerson), email: s(w.email), registry: s(w.registry), actWhen: s(w.actWhen) }),
+        now });
+      n++;
+    }
+    for (const sh of raw.shipments || []) {
+      ins.run({ ...blank, id: sh.id, type: 'shipment', name: s(sh.docType),
+        reg_number: s(sh.objectNumber), app_number: s(sh.caseNumber), priority_date: s(sh.date), now });
+      n++;
+    }
+    // прайс-лист
+    const priceFile = join(DATA_DIR, 'price-seed.json');
+    if (existsSync(priceFile)) {
+      const items = JSON.parse(readFileSync(priceFile, 'utf8'));
+      const pins = db.prepare('INSERT INTO price_items (category,name,fee,duty,total,note,sort) VALUES (?,?,?,?,?,?,?)');
+      items.forEach((it, i) => pins.run(it.category || '', it.name || '', it.fee || '', it.duty || '', it.total || '', it.note || '', i));
     }
     db.prepare('INSERT OR REPLACE INTO meta (k,v) VALUES (?,?)').run('imported_at', now);
     db.prepare('INSERT OR REPLACE INTO meta (k,v) VALUES (?,?)').run('import_source', raw.meta?.source || 'seed.json');
     db.prepare(
       'INSERT INTO activity (at,kind,object_id,object_type,text,user_id) VALUES (?,?,?,?,?,?)'
-    ).run(now, 'import', null, null, `Импорт из «${raw.meta?.source || 'seed.json'}» — ${n} объектов`, null);
+    ).run(now, 'import', null, null, `Импорт данных — ${n} объектов`, null);
     db.exec('COMMIT');
   } catch (e) {
     db.exec('ROLLBACK');
