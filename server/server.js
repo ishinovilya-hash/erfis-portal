@@ -39,12 +39,13 @@ function currentUser(req) {
   const token = parseCookies(req).sid;
   if (!token) return null;
   const row = db.prepare(
-    `SELECT u.id,u.name,u.email,u.must_change FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?`
+    `SELECT u.id,u.name,u.email,u.must_change,u.is_manager FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?`
   ).get(token);
   if (!row) return null;
   db.prepare('UPDATE sessions SET last_seen = ? WHERE token = ?').run(new Date().toISOString(), token);
   return row;
 }
+const isManager = (u) => !!(u && u.is_manager);
 
 function logActivity(kind, obj, txt, userId) {
   db.prepare(
@@ -98,7 +99,7 @@ route('POST', '/api/logout', async (req, res) => {
 route('GET', '/api/session', async (req, res) => {
   const u = currentUser(req);
   if (!u) return json(res, 401, { error: 'not authenticated' });
-  json(res, 200, { user: { id: u.id, name: u.name, email: u.email, mustChange: !!u.must_change }, users: usersPublic() });
+  json(res, 200, { user: { id: u.id, name: u.name, email: u.email, mustChange: !!u.must_change, isManager: isManager(u) }, users: usersPublic() });
 });
 
 route('POST', '/api/password', async (req, res) => {
@@ -357,6 +358,7 @@ route('POST', '/api/mood', async (req, res) => {
 
 route('GET', '/api/mood/mine', async (req, res, _p, url) => {
   const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  if (!isManager(u)) return json(res, 403, { error: 'forbidden' });
   const days = Math.min(Number(url.searchParams.get('days') || 60), 365);
   const rows = db.prepare('SELECT * FROM mood_entries WHERE user_id = ? AND date >= ? ORDER BY date').all(u.id, daysAgoDate(days));
   json(res, 200, { entries: rows.map(moodEntryApi) });
@@ -364,6 +366,7 @@ route('GET', '/api/mood/mine', async (req, res, _p, url) => {
 
 route('GET', '/api/mood/team', async (req, res, _p, url) => {
   const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  if (!isManager(u)) return json(res, 403, { error: 'Раздел доступен только руководителю' });
   const days = Math.min(Number(url.searchParams.get('days') || 30), 180);
   const since = daysAgoDate(days - 1);
   const today = localDate();
@@ -414,6 +417,7 @@ route('GET', '/api/mood/team', async (req, res, _p, url) => {
 
 route('GET', '/api/mood/export', async (req, res) => {
   const u = currentUser(req); if (!u) return text(res, 401, 'auth');
+  if (!isManager(u)) return text(res, 403, 'forbidden');
   const rows = db.prepare('SELECT * FROM mood_entries ORDER BY date, user_id').all();
   const WL = { low: 'недогруз', ok: 'в норме', high: 'завал' };
   const nameOf = (id) => EMPLOYEES.find((e) => e.id === id)?.name || id;
@@ -422,6 +426,57 @@ route('GET', '/api/mood/export', async (req, res) => {
   const lines = rows.map((r) => [r.date, nameOf(r.user_id), r.worked ? 'да' : 'нет', r.mood ?? '', WL[r.workload] || r.workload, safeArr(r.factors).join('; '), r.note].map(esc).join(';'));
   res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="erfis-mood-${todayISO()}.csv"` });
   res.end('﻿' + [head.map(esc).join(';'), ...lines].join('\r\n'));
+});
+
+// ---- QR для оплаты пошлин ----
+const getRequisites = () => {
+  try { return JSON.parse(db.prepare("SELECT v FROM meta WHERE k='pay_requisites'").get().v); }
+  catch { return {}; }
+};
+
+route('GET', '/api/payments/requisites', async (req, res) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  json(res, 200, { requisites: getRequisites() });
+});
+
+route('PUT', '/api/payments/requisites', async (req, res) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const b = await readBody(req);
+  const keys = ['name', 'personalAcc', 'bankName', 'bic', 'correspAcc', 'inn', 'kpp', 'cbc', 'oktmo', 'payerStatus'];
+  const cur = getRequisites();
+  for (const k of keys) if (k in b) cur[k] = String(b[k] ?? '').trim();
+  db.prepare('INSERT OR REPLACE INTO meta (k,v) VALUES (?,?)').run('pay_requisites', JSON.stringify(cur));
+  logActivity('requisites', null, 'Изменены реквизиты для оплаты пошлин', u.id);
+  json(res, 200, { requisites: cur });
+});
+
+route('GET', '/api/payments', async (req, res) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const rows = db.prepare('SELECT * FROM payments ORDER BY id DESC LIMIT 200').all();
+  json(res, 200, { payments: rows.map((r) => ({
+    id: r.id, amount: r.amount_kopecks / 100, purpose: r.purpose, payer: r.payer, uin: r.uin,
+    qrString: r.qr_string, createdBy: r.created_by, createdAt: r.created_at,
+  })) });
+});
+
+route('POST', '/api/payments', async (req, res) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const b = await readBody(req);
+  const kop = Math.round(Number(b.amount) * 100);
+  if (!(kop > 0)) return json(res, 400, { error: 'Укажите сумму больше нуля' });
+  const purpose = String(b.purpose || '').trim();
+  if (!purpose) return json(res, 400, { error: 'Укажите назначение платежа' });
+  const now = new Date().toISOString();
+  const r = db.prepare(`INSERT INTO payments (amount_kopecks,purpose,payer,uin,qr_string,created_by,created_at)
+    VALUES (?,?,?,?,?,?,?)`).run(kop, purpose, String(b.payer || '').trim(), String(b.uin || '').trim(), String(b.qrString || ''), u.id, now);
+  logActivity('payment_qr', null, `Сформирован QR на оплату пошлины: ${(kop / 100).toLocaleString('ru-RU')} ₽`, u.id);
+  json(res, 200, { id: r.lastInsertRowid });
+});
+
+route('DELETE', '/api/payments/:id', async (req, res, p) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  db.prepare('DELETE FROM payments WHERE id = ?').run(Number(p.id));
+  json(res, 200, { ok: true });
 });
 
 // ---- health / admin ----

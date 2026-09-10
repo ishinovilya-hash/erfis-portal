@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   pass_hash TEXT,
   must_change INTEGER NOT NULL DEFAULT 1,
+  is_manager INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS sessions (
@@ -74,7 +75,23 @@ CREATE TABLE IF NOT EXISTS mood_entries (
   UNIQUE(user_id, date)
 );
 CREATE INDEX IF NOT EXISTS idx_mood_date ON mood_entries(date);
+CREATE TABLE IF NOT EXISTS payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  amount_kopecks INTEGER NOT NULL,
+  purpose TEXT NOT NULL DEFAULT '',
+  payer TEXT NOT NULL DEFAULT '',
+  uin TEXT NOT NULL DEFAULT '',
+  qr_string TEXT NOT NULL DEFAULT '',
+  created_by TEXT,
+  created_at TEXT NOT NULL
+);
 `);
+
+// --- миграции для существующих баз ---
+const tableCols = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
+if (!tableCols('users').includes('is_manager')) {
+  db.exec('ALTER TABLE users ADD COLUMN is_manager INTEGER NOT NULL DEFAULT 0');
+}
 
 // ---------- password helpers (scrypt, no native deps) ----------
 export function hashPassword(pw) {
@@ -92,7 +109,7 @@ export function verifyPassword(pw, stored) {
 
 // ---------- seed ----------
 const EMPLOYEES = [
-  { id: 'u_ishinov', name: 'Илья Ишинов', email: 'ishinov@erfis.ru' },
+  { id: 'u_ishinov', name: 'Илья Ишинов', email: 'ishinov@erfis.ru', manager: true },
   { id: 'u_konovalova', name: 'Екатерина Коновалова', email: 'konovalova@erfis.ru' },
   { id: 'u_milyukov', name: 'Сергей Милюков', email: 'milykov@erfis.ru' },
   { id: 'u_petrov', name: 'Дмитрий Петров', email: 'petrov@erfis.ru' },
@@ -101,15 +118,35 @@ const EMPLOYEES = [
 export function seedUsers() {
   const now = new Date().toISOString();
   const ins = db.prepare(
-    'INSERT OR IGNORE INTO users (id,name,email,pass_hash,must_change,created_at) VALUES (?,?,?,?,1,?)'
+    'INSERT OR IGNORE INTO users (id,name,email,pass_hash,must_change,is_manager,created_at) VALUES (?,?,?,?,1,?,?)'
   );
   const created = [];
   for (const e of EMPLOYEES) {
     const exists = db.prepare('SELECT 1 FROM users WHERE id = ?').get(e.id);
     if (exists) continue;
     const pw = randomBytes(6).toString('base64url'); // 8-char temp password
-    ins.run(e.id, e.name, e.email, hashPassword(pw), now);
+    ins.run(e.id, e.name, e.email, hashPassword(pw), e.manager ? 1 : 0, now);
     created.push({ ...e, tempPassword: pw });
+  }
+  // роль руководителя выставляем всегда (идемпотентно) — на случай уже созданной базы
+  for (const e of EMPLOYEES) {
+    db.prepare('UPDATE users SET is_manager = ? WHERE id = ?').run(e.manager ? 1 : 0, e.id);
+  }
+  // реквизиты для QR оплаты пошлин (Роспатент, приказ 14.12.2020 №167) — если ещё не заданы
+  const hasReq = db.prepare("SELECT 1 FROM meta WHERE k = 'pay_requisites'").get();
+  if (!hasReq) {
+    db.prepare('INSERT INTO meta (k,v) VALUES (?,?)').run('pay_requisites', JSON.stringify({
+      name: 'Межрегиональное операционное УФК (Федеральная служба по интеллектуальной собственности)',
+      personalAcc: '03100643000000019500',
+      bankName: 'Операционный департамент Банка России//Межрегиональное операционное УФК г. Москва',
+      bic: '024501901',
+      correspAcc: '40102810045370000002',
+      inn: '7730176088',
+      kpp: '773001001',
+      cbc: '16811505020016000140',
+      oktmo: '45318000',
+      payerStatus: '',
+    }));
   }
   return created;
 }

@@ -233,6 +233,26 @@ td.num{white-space:nowrap}
 .mflag{font-size:11.5px;color:var(--warn);background:var(--flag-bg);border:1px solid var(--flag-edge);padding:2px 8px;border-radius:20px;white-space:nowrap}
 .dstrip{display:flex;flex-wrap:wrap;gap:3px}
 .dcell{width:12px;height:12px;border-radius:3px;flex:0 0 auto;display:inline-block}
+
+/* ---------- QR оплаты пошлин ---------- */
+.paygrid{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start}
+@media (max-width:960px){.paygrid{grid-template-columns:1fr}}
+.qrpane{position:sticky;top:78px;border:1px solid var(--hairline);border-radius:var(--r);background:var(--surface);padding:18px;box-shadow:var(--shadow-sm);text-align:center}
+.qrbox{background:#fff;border:1px solid var(--hairline);border-radius:10px;padding:10px;display:inline-block;line-height:0}
+.qrbox svg{display:block;width:280px;height:280px}
+.qrcap{margin-top:12px}
+.qrbtns{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.qrbtns .btn{width:100%;justify-content:center}
+.qrempty{color:var(--ink-3);font-size:13px;padding:60px 12px;line-height:1.5}
+.reqbox{border:1px solid var(--hairline);border-radius:var(--r);background:var(--surface);margin-top:16px;overflow:hidden}
+.reqbox summary{padding:13px 16px;cursor:pointer;font-weight:500;font-size:13.5px;list-style:none}
+.reqbox summary::-webkit-details-marker{display:none}
+.reqbox summary::before{content:'▸ ';color:var(--ink-3)}
+.reqbox[open] summary::before{content:'▾ '}
+.reqgrid{padding:4px 16px 16px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:640px){.reqgrid{grid-template-columns:1fr}}
+.reqfield{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.reqfield input{padding:8px 10px;border:1px solid var(--hairline);border-radius:7px;background:var(--surface-2);font-size:13px;text-transform:none;letter-spacing:0;color:var(--ink)}
 @media (max-width:560px){
   .spark{display:none}
   .mrow>div[style*="min-width:120px"]{min-width:0!important;flex:1}
@@ -344,12 +364,29 @@ td.num{white-space:nowrap}
 <div id="toasts"></div>
 
 <script src="/logo.js"></script>
+<script src="/qrcode.js"></script>
 <script>
 (function(){
   const paths = (window.ERFIS_LOGO || {emblem:[],word:[]});
   const full = [...(paths.emblem||[]), ...(paths.word||[])].map(d=>`<path d="${d}"/>`).join('');
   document.querySelectorAll('[data-logo="full"]').forEach(el=> el.innerHTML = full);
 })();
+
+// QR: кодируем платёжную строку в Windows-1251 (ГОСТ Р 56042-2014, заголовок ST00011)
+if(window.qrcode){
+  qrcode.stringToBytes = s => { const b=[]; for(let i=0;i<s.length;i++) b.push(s.charCodeAt(i)&0xff); return b; };
+}
+function cp1251(str){
+  let out='';
+  for(const ch of String(str)){
+    const c = ch.codePointAt(0);
+    if(c<=0x7F){ out+=ch; continue; }
+    if(c>=0x410 && c<=0x44F){ out+=String.fromCharCode(c-0x410+0xC0); continue; }
+    const m={0x401:0xA8,0x451:0xB8,0x2116:0xB9,0xAB:0xAB,0xBB:0xBB,0x2014:0x97,0x2013:0x96,0x2026:0x85,0xA0:0xA0,0x2018:0x27,0x2019:0x27,0x201C:0x22,0x201D:0x22,0x2212:0x2D};
+    out+=String.fromCharCode(m[c] ?? 0x3F);
+  }
+  return out;
+}
 
 const OTYPE = {"ИЗ":"Изобретение","ПМ":"Полезная модель","ПО":"Промышленный образец"};
 const DAY = 86400000;
@@ -413,6 +450,7 @@ const ROUTES = {
   trademarks:{title:'Реестр товарных знаков', crumb:'Реестр объектов', type:'trademark'},
   patents:{title:'Реестр патентов', crumb:'Реестр объектов', type:'patent'},
   reminders:{title:'Напоминания о продлении', crumb:'Контроль сроков'},
+  payments:{title:'QR для оплаты пошлин', crumb:'Инструменты'},
   mood:{title:'Настроение команды', crumb:'Команда'},
   trash:{title:'Корзина', crumb:'Служебное'},
   log:{title:'Журнал изменений', crumb:'Служебное'},
@@ -441,8 +479,15 @@ async function loadRoute(){
   else if(r==='trash') state.trash = (await api('/trash')).trash;
   else if(r==='log') state.activity = (await api('/activity?limit=400')).activity;
   else if(r==='mood'){
-    const [today, team, mine] = await Promise.all([api('/mood/today'), api('/mood/team?days=30'), api('/mood/mine?days=60')]);
-    state.moodToday = today; state.moodTeam = team; state.moodMine = mine.entries;
+    state.moodToday = await api('/mood/today');
+    if(state.me.isManager){
+      const [team, mine] = await Promise.all([api('/mood/team?days=30'), api('/mood/mine?days=60')]);
+      state.moodTeam = team; state.moodMine = mine.entries;
+    } else { state.moodTeam = null; state.moodMine = null; }
+  }
+  else if(r==='payments'){
+    const [reqs, list] = await Promise.all([api('/payments/requisites'), api('/payments')]);
+    state.requisites = reqs.requisites; state.payments = list.payments;
   }
 }
 async function loadCounts(){
@@ -464,6 +509,8 @@ function renderNav(){
     {r:'patents', label:'Патенты', count:h.patents, ic:'M12 3l8 4-8 4-8-4 8-4Zm-8 9 8 4 8-4M4 16l8 4 8-4'},
     {sec:'Контроль сроков'},
     {r:'reminders', label:'Напоминания', count:dueTotal||null, flag:!!dueTotal, ic:'M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'},
+    {sec:'Инструменты'},
+    {r:'payments', label:'QR оплаты пошлин', ic:'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h3v3h-3zM19 14h1M19 19h1M17 19h0'},
     {sec:'Команда'},
     {r:'mood', label:'Настроение команды', count: (state.moodToday && !state.moodToday.entry) ? '•' : null, flag: !!(state.moodToday && !state.moodToday.entry), ic:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM9 10h.01M15 10h.01M8.5 15a4 4 0 0 0 7 0'},
     {sec:'Служебное'},
@@ -884,46 +931,56 @@ function moodTeamChart(series){
 
 function moodForm(){
   const f = state.moodForm;
-  const off = f.worked===false;
   const moodBtns = [1,2,3,4,5].map(m=>`
-    <button class="moodbtn ${f.mood===m?'sel':''}" data-mood="${m}" ${off?'disabled':''}>
+    <button class="moodbtn ${f.mood===m?'sel':''}" data-mood="${m}">
       <span class="me">${MOOD_EMOJI[m]}</span><span class="ml">${MOOD_LABEL[m]}</span></button>`).join('');
-  const wlBtns = ['low','ok','high'].map(k=>`<button data-wl="${k}" aria-pressed="${f.workload===k}" ${off?'disabled':''}>${WORKLOAD_LABEL[k]}</button>`).join('');
-  const chips = (state.moodToday.factors||[]).map(x=>`<button class="chip ${f.factors.includes(x)?'sel':''}" data-factor="${esc(x)}" ${off?'disabled':''}>${esc(x)}</button>`).join('');
+  const wlBtns = ['low','ok','high'].map(k=>`<button data-wl="${k}" aria-pressed="${f.workload===k}">${WORKLOAD_LABEL[k]}</button>`).join('');
+  const chips = (state.moodToday.factors||[]).map(x=>`<button class="chip ${f.factors.includes(x)?'sel':''}" data-factor="${esc(x)}">${esc(x)}</button>`).join('');
   return `<div class="checkin">
     <h3>Как прошёл рабочий день${state.moodToday?.date?`, ${ruDate(state.moodToday.date)}`:''}?</h3>
-    <p class="hint" style="margin:2px 0 14px">Одна отметка в день. Данные видит команда — это не оценка работы, а забота о том, чтобы никто не перегорал.</p>
+    <p class="hint" style="margin:2px 0 14px">Одна отметка в день. Это не оценка работы — данные помогают вовремя заметить перегрузку. Отметки видит только руководитель.</p>
     <div class="moodrow">${moodBtns}</div>
-    <div style="margin-top:16px"><div class="fl">Загрузка сегодня</div><div class="seg wl">${wlBtns}</div></div>
+    <div style="margin-top:16px"><div class="fl">Нагрузка сегодня</div><div class="seg wl">${wlBtns}</div></div>
     <div style="margin-top:16px"><div class="fl">Что повлияло на день? <span style="color:var(--ink-3);font-weight:400">— по желанию</span></div><div class="chips">${chips}</div></div>
-    <div style="margin-top:14px"><div class="fl">Пара слов <span style="color:var(--ink-3);font-weight:400">— по желанию, видит команда</span></div>
-      <textarea id="mood-note" rows="2" placeholder="Например: закрыли крупную заявку; или — завал из-за срочных правок" ${off?'disabled':''}>${esc(f.note||'')}</textarea></div>
+    <div style="margin-top:14px"><div class="fl">Пара слов <span style="color:var(--ink-3);font-weight:400">— по желанию</span></div>
+      <textarea id="mood-note" rows="2" placeholder="Например: закрыли крупную заявку; или — завал из-за срочных правок">${esc(f.note||'')}</textarea></div>
     <div class="checkin-actions">
-      <button class="btn primary" id="mood-save">${off?'Отметить выходной':'Сохранить отметку'}</button>
-      <button class="btn" id="mood-off">${off?'Я всё-таки работал(а)':'Сегодня выходной / не работал(а)'}</button>
+      <button class="btn primary" id="mood-save">Сохранить отметку</button>
       ${state.moodEditing?`<button class="btn" id="mood-cancel">Отмена</button>`:''}
     </div>
   </div>`;
 }
 
 function renderMood(){
-  const t = state.moodTeam, today = state.moodToday, mine = state.moodMine;
-  if(!t || !today){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
+  const today = state.moodToday;
+  if(!today){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
   const entry = today.entry;
   const editing = state.moodEditing || !entry;
   if(!state.moodForm) state.moodForm = entry
-    ? {mood:entry.mood, workload:entry.workload, factors:entry.factors.slice(), note:entry.note, worked:entry.worked}
+    ? {mood:entry.mood, workload:entry.workload, factors:entry.factors.slice(), note:entry.note, worked:true}
     : {mood:null, workload:'ok', factors:[], note:'', worked:true};
 
   const summary = entry ? `<div class="checkin done">
       <div style="display:flex;align-items:center;gap:14px">
-        <span style="font-size:32px">${entry.worked?MOOD_EMOJI[entry.mood]:'🌿'}</span>
-        <div><div style="font-weight:600">${entry.worked?`День отмечен как «${MOOD_LABEL[entry.mood]}»`:'Отмечен выходной'}</div>
-        <div class="hint">${entry.worked?`Загрузка: ${WORKLOAD_LABEL[entry.workload]}${entry.factors.length?' · '+entry.factors.join(', '):''}`:'Хорошего отдыха'}</div></div>
+        <span style="font-size:32px">${MOOD_EMOJI[entry.mood]}</span>
+        <div><div style="font-weight:600">День отмечен как «${MOOD_LABEL[entry.mood]}»</div>
+        <div class="hint">Нагрузка: ${WORKLOAD_LABEL[entry.workload]}${entry.factors.length?' · '+entry.factors.join(', '):''}</div></div>
         <button class="btn" id="mood-edit" style="margin-left:auto">Изменить</button>
       </div>
     </div>` : '';
 
+  // сотрудник (не руководитель) видит только свою отметку за сегодня
+  if(!state.me.isManager){
+    $('#view').innerHTML = `<div style="max-width:620px">
+      ${editing ? moodForm() : summary}
+      <div class="hint" style="margin-top:16px;line-height:1.5">Спасибо, что отмечаетесь. Историю и статистику видит только руководитель — это нужно, чтобы никто не выгорал. Свои прошлые отметки вы не видите: важна только сегодняшняя.</div>
+    </div>`;
+    wireMoodForm();
+    return;
+  }
+
+  const t = state.moodTeam, mine = state.moodMine;
+  if(!t){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
   const p = t.participationToday;
   const memberDot = m => `<span class="tavatar ${m.todayDone?'':'ndone'}" title="${esc(m.name)}${m.todayDone?' — отметился':' — ещё не отметился'}" style="${m.todayDone&&m.today?.worked?`background:${moodColor(m.today.mood)}`:''}">${esc(m.initials)}</span>`;
 
@@ -973,10 +1030,14 @@ function renderMood(){
       </div>
     </div>`;
 
+  if($('#view #mood-export')) $('#view #mood-export').onclick = ()=> window.open('/api/mood/export','_blank');
+  wireMoodForm();
+}
+
+function wireMoodForm(){
   const q = s=>$('#view '+s);
   if(q('#mood-edit')) q('#mood-edit').onclick = ()=>{ state.moodEditing=true; renderMood(); };
   if(q('#mood-cancel')) q('#mood-cancel').onclick = ()=>{ state.moodEditing=false; state.moodForm=null; renderMood(); };
-  if(q('#mood-export')) q('#mood-export').onclick = ()=> window.open('/api/mood/export','_blank');
   document.querySelectorAll('#view [data-mood]').forEach(b=> b.onclick=()=>{ state.moodForm.mood=+b.dataset.mood; renderMood(); });
   document.querySelectorAll('#view [data-wl]').forEach(b=> b.onclick=()=>{ state.moodForm.workload=b.dataset.wl; renderMood(); });
   document.querySelectorAll('#view [data-factor]').forEach(b=> b.onclick=()=>{
@@ -984,19 +1045,167 @@ function renderMood(){
     if(i<0) a.push(f); else a.splice(i,1); renderMood();
   });
   if(q('#mood-note')) q('#mood-note').oninput = e=>{ state.moodForm.note=e.target.value; };
-  if(q('#mood-off')) q('#mood-off').onclick = ()=>{ state.moodForm.worked = (state.moodForm.worked===false); renderMood(); };
   if(q('#mood-save')) q('#mood-save').onclick = saveMood;
 }
 
 async function saveMood(){
   const f = state.moodForm;
-  if(f.worked!==false && !f.mood){ toast('Оцените, как прошёл день', true); return; }
+  if(!f.mood){ toast('Оцените, как прошёл день', true); return; }
   try{
-    await api('/mood', {method:'POST', body:jbody(f)});
+    await api('/mood', {method:'POST', body:jbody({mood:f.mood, workload:f.workload, factors:f.factors, note:f.note})});
     toast('Спасибо, отметка сохранена');
     state.moodEditing=false; state.moodForm=null;
     await refresh();
   }catch(e){ toast(e.message, true); }
+}
+
+/* ---------- QR для оплаты пошлин ---------- */
+const REQ_FIELDS = [
+  ['name','Наименование получателя'],['personalAcc','Казначейский счёт (поле 17)'],
+  ['bankName','Банк получателя'],['bic','БИК'],['correspAcc','Единый казначейский счёт (поле 15)'],
+  ['inn','ИНН'],['kpp','КПП'],['cbc','КБК'],['oktmo','ОКТМО'],['payerStatus','Статус плательщика (поле 101) — по желанию'],
+];
+function buildPaymentString(r, inp){
+  const parts = ['ST00011'];
+  const add = (k,v)=>{ v=String(v==null?'':v).trim(); if(v!=='') parts.push(k+'='+v.replace(/\|/g,' ')); };
+  let purpose = inp.purpose;
+  if(inp.uin) purpose = 'УИН'+inp.uin+'. '+purpose;
+  add('Name', r.name); add('PersonalAcc', r.personalAcc); add('BankName', r.bankName);
+  add('BIC', r.bic); add('CorrespAcc', r.correspAcc);
+  add('PayeeINN', r.inn); add('KPP', r.kpp); add('CBC', r.cbc); add('OKTMO', r.oktmo);
+  add('PayerStatus', r.payerStatus);
+  if(inp.amount>0) add('Sum', Math.round(inp.amount*100));
+  add('Purpose', purpose);
+  if(inp.payer) add('PayerName', inp.payer);
+  return parts.join('|');
+}
+function qrMatrix(str){
+  const qr = qrcode(0, 'M');
+  qr.addData(cp1251(str), 'Byte');
+  qr.make();
+  return qr;
+}
+function qrSvg(qr, px){
+  const n = qr.getModuleCount(), m = 4, size = n + m*2, cell = px/size;
+  let rects = '';
+  for(let r=0;r<n;r++) for(let c=0;c<n;c++) if(qr.isDark(r,c))
+    rects += `<rect x="${((c+m)*cell).toFixed(2)}" y="${((r+m)*cell).toFixed(2)}" width="${cell.toFixed(2)}" height="${cell.toFixed(2)}"/>`;
+  return `<svg viewBox="0 0 ${px} ${px}" width="${px}" height="${px}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${px}" height="${px}" fill="#fff"/><g fill="#0B0B2E">${rects}</g></svg>`;
+}
+function qrPng(qr, px){
+  const n = qr.getModuleCount(), m = 4, size = n + m*2, cell = Math.floor(px/size), dim = cell*size;
+  const cv = document.createElement('canvas'); cv.width = cv.height = dim;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0,0,dim,dim);
+  g.fillStyle = '#0B0B2E';
+  for(let r=0;r<n;r++) for(let c=0;c<n;c++) if(qr.isDark(r,c)) g.fillRect((c+m)*cell,(r+m)*cell,cell,cell);
+  return cv.toDataURL('image/png');
+}
+const fmtMoney = v => (Number(v)||0).toLocaleString('ru-RU',{minimumFractionDigits:2, maximumFractionDigits:2});
+
+function renderPayments(){
+  const r = state.requisites, list = state.payments;
+  if(!r){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
+  if(!state.payForm) state.payForm = {amount:'', purpose:'', payer:'', uin:''};
+  const f = state.payForm;
+
+  const reqRows = REQ_FIELDS.map(([k,label])=>`
+    <label class="reqfield"><span>${label}</span>
+      <input data-req="${k}" value="${esc(r[k]||'')}" ${k==='payerStatus'?'':'required'}/></label>`).join('');
+
+  $('#view').innerHTML = `
+    <div class="demoline">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM17 14h3v3h-3zM14 17h0M20 20h0"/></svg>
+      Реквизиты Роспатента уже заданы. Введите сумму и назначение — получите QR-код: клиент наводит камеру банковского приложения и попадает сразу на оплату пошлины.
+    </div>
+    <div class="paygrid">
+      <div>
+        <div class="listcard" style="padding:18px">
+          <div class="field" style="border:0;padding:0 0 12px"><label>Сумма пошлины, ₽</label>
+            <input id="pay-amount" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(f.amount)}" placeholder="напр. 12000" style="max-width:220px"/></div>
+          <div class="field" style="padding:12px 0"><label>Назначение платежа</label>
+            <textarea id="pay-purpose" rows="3" placeholder="Пункт Приложения к Положению, № заявки/патента/свидетельства, наименование действия. Напр.: п.1.15 — регистрация ТЗ по заявке № 2025763114">${esc(f.purpose)}</textarea>
+            <div class="hint">Так Роспатент опознаёт платёж. Одна квитанция — одна заявка/патент.</div></div>
+          <div class="grid2">
+            <div class="field" style="padding:12px 0"><label>Плательщик — по желанию</label>
+              <input id="pay-payer" value="${esc(f.payer)}" placeholder="ФИО или наименование клиента"/></div>
+            <div class="field" style="padding:12px 0"><label>УИН — по желанию</label>
+              <input id="pay-uin" value="${esc(f.uin)}" placeholder="обычно не требуется"/></div>
+          </div>
+        </div>
+
+        <details class="reqbox">
+          <summary>Реквизиты получателя${''} <span class="hint">— менять обычно не нужно</span></summary>
+          <div class="reqgrid">${reqRows}</div>
+          <button class="btn" id="req-save" style="margin-top:12px">Сохранить реквизиты</button>
+        </details>
+
+        ${list.length?`<div class="listcard" style="margin-top:16px">
+          <div style="padding:12px 16px;border-bottom:1px solid var(--hairline-2)"><strong style="font-family:inherit">История</strong></div>
+          ${list.map(p=>`<div class="lrow" data-open="${p.id}" style="cursor:pointer">
+            <div class="lr-main"><div class="lr-t">${fmtMoney(p.amount)} ₽</div><div class="lr-s">${esc(p.purpose.slice(0,90))}${p.purpose.length>90?'…':''}</div></div>
+            <div class="when">${fmtDT(p.createdAt)}</div>
+            <button class="btn danger" data-del="${p.id}" style="padding:5px 9px">✕</button>
+          </div>`).join('')}
+        </div>`:''}
+      </div>
+
+      <div class="qrpane" id="qrpane"></div>
+    </div>`;
+
+  updateQrPane();
+
+  const bind = (id, ev, fn) => { const el = $('#view #'+id); if(el) el.addEventListener(ev, fn); };
+  bind('pay-amount','input', e=>{ f.amount = e.target.value; scheduleQr(); });
+  bind('pay-purpose','input', e=>{ f.purpose = e.target.value; scheduleQr(); });
+  bind('pay-payer','input', e=>{ f.payer = e.target.value; scheduleQr(); });
+  bind('pay-uin','input', e=>{ f.uin = e.target.value; scheduleQr(); });
+  document.querySelectorAll('#view [data-req]').forEach(el=> el.addEventListener('input', ()=>{ state.requisites[el.dataset.req] = el.value; scheduleQr(); }));
+  bind('req-save','click', async ()=>{
+    try{ const res = await api('/payments/requisites',{method:'PUT', body:jbody(state.requisites)});
+      state.requisites = res.requisites; toast('Реквизиты сохранены');
+    }catch(e){ toast(e.message,true); }
+  });
+  document.querySelectorAll('#view [data-open]').forEach(el=> el.addEventListener('click', e=>{
+    if(e.target.dataset.del) return;
+    const p = list.find(x=>x.id==el.dataset.open); if(!p) return;
+    state.payForm = {amount:String(p.amount), purpose:p.purpose, payer:p.payer, uin:p.uin};
+    renderPayments(); window.scrollTo({top:0,behavior:'smooth'});
+  }));
+  document.querySelectorAll('#view [data-del]').forEach(el=> el.addEventListener('click', async e=>{
+    e.stopPropagation();
+    try{ await api('/payments/'+el.dataset.del,{method:'DELETE'}); await loadRoute(); renderPayments(); }catch(err){ toast(err.message,true); }
+  }));
+}
+let _qrTimer = null;
+function scheduleQr(){ clearTimeout(_qrTimer); _qrTimer = setTimeout(updateQrPane, 250); }
+function updateQrPane(){
+  const pane = $('#view #qrpane'); if(!pane) return;
+  const r = state.requisites, f = state.payForm;
+  let qr=null, str='', err='';
+  if(f.purpose.trim()){
+    try{ str = buildPaymentString(r, {...f, amount:parseFloat(f.amount)||0}); qr = qrMatrix(str); }
+    catch(e){ err = 'Слишком длинный текст назначения — сократите.'; }
+  }
+  if(!qr){ pane.innerHTML = `<div class="qrempty">${err||'Заполните сумму и назначение — QR-код появится здесь'}</div>`; return; }
+  pane.innerHTML = `
+    <div class="qrbox">${qrSvg(qr, 300)}</div>
+    <div class="qrcap"><div style="font-size:18px;font-weight:600">${fmtMoney(f.amount)} ₽</div>
+      <div class="hint" style="margin-top:2px">${esc(f.purpose.slice(0,120))}${f.purpose.length>120?'…':''}</div></div>
+    <div class="qrbtns">
+      <button class="btn primary" id="qr-png">Скачать PNG</button>
+      <button class="btn" id="qr-copy">Скопировать строку</button>
+      <button class="btn" id="qr-save">Сохранить в историю</button>
+    </div>
+    <div class="hint" style="margin-top:6px">Формат ГОСТ Р 56042-2014. Читается приложениями Сбербанка, Т-Банка, ВТБ, Альфа-Банка и др.</div>`;
+  $('#view #qr-png').onclick = ()=>{ const a=document.createElement('a'); a.href=qrPng(qr,900); a.download=`qr-poshlina-${f.amount||'0'}.png`; a.click(); };
+  $('#view #qr-copy').onclick = async ()=>{ try{ await navigator.clipboard.writeText(str); toast('Строка платежа скопирована'); }catch(e){ toast('Не удалось скопировать',true); } };
+  $('#view #qr-save').onclick = async ()=>{
+    try{ await api('/payments',{method:'POST', body:jbody({amount:parseFloat(f.amount)||0, purpose:f.purpose, payer:f.payer, uin:f.uin, qrString:str})});
+      toast('Сохранено в историю'); await loadRoute(); renderPayments();
+    }catch(e){ toast(e.message,true); }
+  };
 }
 
 function renderTrash(){
@@ -1067,6 +1276,7 @@ function renderAll(){
   renderBell();
   if(state.route==='trademarks'||state.route==='patents') renderRegistry();
   else if(state.route==='reminders') renderReminders();
+  else if(state.route==='payments') renderPayments();
   else if(state.route==='mood') renderMood();
   else if(state.route==='trash') renderTrash();
   else if(state.route==='log') renderLog();
