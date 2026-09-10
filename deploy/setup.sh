@@ -54,29 +54,46 @@ EOF
   chmod 600 "$DATA_DIR/env"
 fi
 
-say "cloudflared"
-if ! command -v cloudflared >/dev/null 2>&1; then
-  ARCH="$(dpkg --print-architecture)"
-  curl -fsSL -o /usr/local/bin/cloudflared \
-    "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH}"
-  chmod +x /usr/local/bin/cloudflared
-fi
-cloudflared --version || true
-
 say "systemd-сервисы"
+apt-get install -y -qq openssh-client >/dev/null || true
+install -d -m 700 -o "$SVC_USER" -g "$SVC_USER" "$DATA_DIR/.ssh"
+systemctl disable --now erfis-cloudflared 2>/dev/null || true
+rm -f /etc/systemd/system/erfis-cloudflared.service
+
 install -m 644 "$APP_DIR/deploy/erfis-portal.service" /etc/systemd/system/erfis-portal.service
-install -m 644 "$APP_DIR/deploy/cloudflared.service" /etc/systemd/system/erfis-cloudflared.service
+cat > /etc/systemd/system/erfis-tunnel.service <<EOF
+[Unit]
+Description=ЭРФИС Портал — туннель (localhost.run)
+After=network-online.target erfis-portal.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$SVC_USER
+Group=$SVC_USER
+Environment=HOME=$DATA_DIR
+ExecStartPre=/bin/sleep 3
+ExecStart=/usr/bin/ssh -tt -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 80:localhost:8080 nokey@localhost.run
+ExecStartPost=/bin/bash -c 'for i in \$(seq 1 40); do sleep 2; u=\$(journalctl -u erfis-tunnel -n 60 --no-pager 2>/dev/null | grep -oE "https://[a-z0-9]+\\\\.lhr\\\\.life" | tail -1); if [ -n "\$u" ]; then echo "\$u" > $DATA_DIR/tunnel-url; break; fi; done'
+Restart=always
+RestartSec=8
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 systemctl daemon-reload
 systemctl enable --now erfis-portal.service
 systemctl restart erfis-portal.service
-systemctl enable --now erfis-cloudflared.service
-systemctl restart erfis-cloudflared.service
+systemctl enable --now erfis-tunnel.service
+systemctl restart erfis-tunnel.service
 
 say "Ожидание туннеля"
 URL=""
-for i in $(seq 1 30); do
+for i in $(seq 1 45); do
   sleep 2
-  URL="$(journalctl -u erfis-cloudflared -n 100 --no-pager 2>/dev/null | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1 || true)"
+  URL="$(journalctl -u erfis-tunnel -n 80 --no-pager 2>/dev/null | grep -oE 'https://[a-z0-9]+\.lhr\.life' | tail -1 || true)"
   [ -n "$URL" ] && break
 done
 [ -n "$URL" ] && { echo "$URL" > "$DATA_DIR/tunnel-url"; chown "$SVC_USER:$SVC_USER" "$DATA_DIR/tunnel-url"; }
@@ -87,10 +104,10 @@ cat <<EOF
 ============================================================
   ЭРФИС Портал установлен.
 
-  Публичный адрес:   ${URL:-"(не определился — см. deploy/url.sh)"}
+  Публичный адрес:   ${URL:-"(не определился — sudo journalctl -u erfis-tunnel -n 40)"}
   DEPLOY_KEY:         $DK
 
-  Статус:   systemctl status erfis-portal erfis-cloudflared
-  Логи:     journalctl -u erfis-portal -f
+  Адрес когда-нибудь понадобится обновить:  sudo cat $DATA_DIR/tunnel-url
+  Статус:   systemctl status erfis-portal erfis-tunnel
 ============================================================
 EOF
