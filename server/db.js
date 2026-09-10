@@ -213,16 +213,13 @@ export function importSeedIfEmpty() {
     }
     for (const ct of raw.contracts || []) {
       ins.run({ ...blank, id: ct.id, type: 'contract', holder: s(ct.contragent),
-        name: s(ct.workDesc) || ('Договор ' + s(ct.contractNo || '')).trim(),
-        reg_number: s(ct.contractNo), priority_date: s(ct.contractDate), expiry_date: s(ct.deadline),
-        extra: JSON.stringify({ contractKind: s(ct.kind), workDate: s(ct.workDate), stage: s(ct.stage),
-          act: s(ct.act), executor: s(ct.executor), contactPerson: s(ct.contactName), email: s(ct.contactEmail) }),
-        now });
+        name: s(ct.workDesc) || 'оказание услуг',
+        reg_number: s(ct.contractNo), priority_date: s(ct.contractDate),
+        extra: JSON.stringify({ contractKind: s(ct.kind) }), now });
       n++;
     }
-    // примечания для ФЛ (кол-во note)
     for (const ct of (raw.contracts || []).filter((x) => x.note)) {
-      db.prepare("UPDATE objects SET notes = ? WHERE id = ?").run(s(ct.note), ct.id);
+      db.prepare('UPDATE objects SET notes = ? WHERE id = ?').run(s(ct.note), ct.id);
     }
     // прайс-лист
     const priceFile = join(DATA_DIR, 'price-seed.json');

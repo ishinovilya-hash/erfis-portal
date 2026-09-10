@@ -318,7 +318,7 @@ route('GET', '/api/export', async (req, res, _p, url) => {
     patent: [['holder', 'Правообладатель'], ['objectType', 'Вид'], ['name', 'Название'], ['appNumber', '№ заявки'], ['regNumber', '№ патента'], ['priorityDate', 'Приоритет'], ['expiryDate', 'Действует до'], ['status', 'Статус'], ['responsible', 'Ответственный']],
     software: [['intNo', 'Вн. №'], ['name', 'Название'], ['regNumber', '№ регистрации'], ['holder', 'Правообладатель'], ['contactPerson', 'Контактное лицо'], ['email', 'E-mail'], ['registry', 'Реестр'], ['actWhen', 'Когда обратиться'], ['responsible', 'Ответственный']],
     shipment: [['priorityDate', 'Дата'], ['name', 'Вид документа'], ['regNumber', '№ объекта'], ['appNumber', '№ делопроизводства'], ['responsible', 'Ответственный']],
-    contract: [['holder', 'Контрагент'], ['regNumber', '№ договора'], ['name', 'Вид работ / № ТЗ'], ['workDate', 'Дата ТЗ'], ['expiryDate', 'Срок'], ['stage', 'Стадия'], ['act', 'Акт'], ['executor', 'Исполнитель'], ['responsible', 'Ответственный']],
+    contract: [['regNumber', '№ договора'], ['holder', 'Контрагент'], ['name', 'Вид работ'], ['priorityDate', 'Дата договора'], ['notes', 'Примечание'], ['responsible', 'Ответственный']],
   };
   const cols = COLS[type];
   const nameOf = (id) => EMPLOYEES.find((e) => e.id === id)?.name || '';
@@ -634,10 +634,9 @@ route('POST', '/api/admin/import', async (req, res) => {
     }
     for (const ct of raw.contracts || []) {
       ins.run({ ...D, id: ct.id, type: 'contract', holder: s(ct.contragent),
-        name: s(ct.workDesc) || ('Договор ' + s(ct.contractNo || '')).trim(),
-        reg_number: s(ct.contractNo), priority_date: s(ct.contractDate), expiry_date: s(ct.deadline),
-        extra: JSON.stringify({ contractKind: s(ct.kind), workDate: s(ct.workDate), stage: s(ct.stage),
-          act: s(ct.act), executor: s(ct.executor), contactPerson: s(ct.contactName), email: s(ct.contactEmail) }), now }); n++;
+        name: s(ct.workDesc) || 'оказание услуг',
+        reg_number: s(ct.contractNo), priority_date: s(ct.contractDate),
+        extra: JSON.stringify({ contractKind: s(ct.kind) }), now }); n++;
     }
     for (const ct of (raw.contracts || []).filter((x) => x.note)) {
       db.prepare('UPDATE objects SET notes = ? WHERE id = ?').run(s(ct.note), ct.id);

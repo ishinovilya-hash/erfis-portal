@@ -543,22 +543,18 @@ const REG = {
       {key:'regNumber',label:'№ объекта',cls:'mono'}, {key:'appNumber',label:'№ делопроизводства',cls:'mono'}, RESP_COL],
   },
   contract: {
-    label:'Договор контрагента', add:'Добавить запись', title1:'Вид работ / № ТЗ', holderReq:true,
-    cols:[FLAG_COL, {key:'holder',label:'Контрагент',cls:'holder'}, {key:'regNumber',label:'№ договора',cls:'mono'},
-      {key:'name',label:'Вид работ / № ТЗ',cls:'name'}, {key:'workDate',label:'Дата ТЗ',cls:'mono num'},
-      {key:'expiryDate',label:'Срок',cls:'mono num'}, {key:'_stage',label:'Стадия'}, {key:'_act',label:'Акт'},
-      {key:'executor',label:'Исполнитель'}, RESP_COL],
+    label:'Договор контрагента', add:'Добавить договор', title1:'Контрагент', holderReq:true, noStatus:true,
+    cols:[FLAG_COL, {key:'regNumber',label:'№ договора',cls:'mono'}, {key:'holder',label:'Контрагент',cls:'holder'},
+      {key:'name',label:'Вид работ',cls:'name'}, {key:'priorityDate',label:'Дата договора',cls:'mono num'}, RESP_COL],
   },
 };
 const CONTRACT_KINDS = [['legal','Юридические лица'],['individual','Физические лица'],['subscription','Абонентские договоры']];
-const STAGE_TAG = {'выполнено':'active','в процессе':'expiring','стоп':'none','отмена':'expired','отменен':'expired'};
 const CONTRACT_COLS = {
   legal: REG.contract.cols,
-  individual: [FLAG_COL, {key:'regNumber',label:'№ договора',cls:'mono'}, {key:'holder',label:'Контрагент',cls:'holder'},
+  subscription: REG.contract.cols,
+  individual: [FLAG_COL, {key:'regNumber',label:'№ договора',cls:'mono'}, {key:'holder',label:'ФИО',cls:'holder'},
     {key:'name',label:'Вид работ',cls:'name'}, {key:'priorityDate',label:'Дата договора',cls:'mono num'},
     {key:'notes',label:'Примечание'}, RESP_COL],
-  subscription: [FLAG_COL, {key:'regNumber',label:'№ договора',cls:'mono'}, {key:'holder',label:'Контрагент',cls:'holder'},
-    {key:'name',label:'Вид работ',cls:'name'}, {key:'priorityDate',label:'Дата договора',cls:'mono num'}, RESP_COL],
 };
 const STATUS_RANK = {expired:0, expiring:1, active:2, none:3};
 
@@ -575,15 +571,12 @@ function applyView(list){
   rows.sort((a,b)=>{
     let x,y;
     if(key==='_status'){ x=STATUS_RANK[a.status.key]; y=STATUS_RANK[b.status.key]; }
-    else if(key==='_stage'){ x=a.stage||'я'; y=b.stage||'я'; }
-    else if(key==='_act'){ x=a.act||''; y=b.act||''; }
     else if(key==='flag'){ x=a.flagged?1:0; y=b.flagged?1:0; }
     else if(key==='responsible'){ x=userName(a.responsible)||'я'; y=userName(b.responsible)||'я'; }
     else { x=a[key]; y=b[key]; }
     x = x==null?'':x; y = y==null?'':y;
-    if(typeof x==='string') x=x.toLowerCase();
-    if(typeof y==='string') y=y.toLowerCase();
-    return x<y?-dir : x>y?dir : 0;
+    if(typeof x==='number' && typeof y==='number') return (x-y)*dir;
+    return String(x).localeCompare(String(y), 'ru', {numeric:true, sensitivity:'base'}) * dir;
   });
   return rows;
 }
@@ -597,8 +590,6 @@ function rowHtml(it, cols){
       return '<td></td>';
     }
     if(c.key==='_status') return `<td><span class="tag ${it.status.key}"><span class="pip"></span>${esc(it.status.label)}</span></td>`;
-    if(c.key==='_stage'){ if(!it.stage) return '<td>—</td>'; return `<td><span class="tag ${STAGE_TAG[it.stage]||'none'}"><span class="pip"></span>${esc(it.stage)}</span></td>`; }
-    if(c.key==='_act') return `<td>${it.act==='да'?'<span class="tag active"><span class="pip"></span>есть</span>':it.act?esc(it.act):'—'}</td>`;
     if(c.key==='objectType') return `<td><span class="otype" title="${OTYPE[it.objectType]||''}">${esc(it.objectType||'—')}</span></td>`;
     if(c.key==='responsible'){
       const n = userName(it.responsible);
@@ -738,19 +729,11 @@ function panelBody(type, f){
   if(type==='contract'){
     const src = state.panel.mode!=='view' ? state.panel.draft : state.panel.obj;
     const k = (src && src.contractKind) || 'legal';
-    const base = [
+    return [
       f('Тип договора','contractKind',{type:'select',options:CONTRACT_KINDS}),
-      f('Контрагент','holder'),
+      f(k==='individual'?'ФИО контрагента':'Контрагент','holder'),
       g2(f('№ договора','regNumber',{mono:true}), f('Дата договора','priorityDate',{type:'date',mono:true,fmt:true})),
-    ];
-    if(k!=='legal') return [...base, f('Вид работ','name',{type:'textarea'})].join('');
-    return [...base,
-      f('Вид работ / № ТЗ','name',{type:'textarea'}),
-      g2(f('Дата ТЗ','workDate',{type:'date',mono:true,fmt:true}), f('Срок','expiryDate',{type:'date',mono:true,fmt:true})),
-      g2(f('Стадия','stage',{type:'select',options:[['','—'],['в процессе','в процессе'],['выполнено','выполнено'],['стоп','стоп'],['отмена','отмена']]}),
-         f('Акт','act',{type:'select',options:[['','—'],['да','да'],['нет','нет']]})),
-      f('Исполнитель','executor',{ph:'кто вёл работу'}),
-      g2(f('Контактное лицо','contactPerson'), f('E-mail контакта','email')),
+      f('Вид работ','name'),
     ].join('');
   }
   return [ // trademark
