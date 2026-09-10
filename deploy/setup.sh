@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
 # Установка ЭРФИС Портала на чистый Ubuntu 22.04/24.04.
-# Запуск (в VNC-консоли VK Cloud, под root):
-#   curl -fsSL https://raw.githubusercontent.com/OWNER/REPO/main/deploy/setup.sh | sudo bash
-# Повторный запуск обновляет код и перезапускает сервис.
+# Репозиторий приватный. Перед запуском положить приватный deploy-ключ в /root/.ssh/erfis_deploy
+# Затем (под root):
+#   git clone git@github.com:ishinovilya-hash/erfis-portal.git /opt/erfis-portal \
+#     && bash /opt/erfis-portal/deploy/setup.sh
+# Повторный запуск скрипта обновляет код и перезапускает сервис.
 set -euo pipefail
 
-REPO="${ERFIS_REPO:-__REPO_URL__}"
+REPO="${ERFIS_REPO:-git@github.com:ishinovilya-hash/erfis-portal.git}"
 BRANCH="${ERFIS_BRANCH:-main}"
+KEY_FILE="/root/.ssh/erfis_deploy"
+if [ -f "$KEY_FILE" ]; then
+  chmod 600 "$KEY_FILE"
+  export GIT_SSH_COMMAND="ssh -i $KEY_FILE -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+fi
 APP_DIR=/opt/erfis-portal
 DATA_DIR=/var/lib/erfis-portal
 SVC_USER=erfis
@@ -32,6 +39,12 @@ id -u "$SVC_USER" >/dev/null 2>&1 || useradd --system --create-home --home-dir "
 usermod -aG systemd-journal "$SVC_USER" || true
 mkdir -p "$DATA_DIR"
 
+# deploy-ключ кладём туда, где его прочитает сервис (обновление кода из портала)
+SVC_KEY="$DATA_DIR/deploy_key"
+if [ -f "$KEY_FILE" ] && [ ! -f "$SVC_KEY" ]; then
+  install -m 600 -o "$SVC_USER" -g "$SVC_USER" "$KEY_FILE" "$SVC_KEY"
+fi
+
 say "Код портала"
 if [ -d "$APP_DIR/.git" ]; then
   git -C "$APP_DIR" fetch --all -q
@@ -39,6 +52,7 @@ if [ -d "$APP_DIR/.git" ]; then
 else
   git clone -q -b "$BRANCH" "$REPO" "$APP_DIR"
 fi
+[ -f "$SVC_KEY" ] && git -C "$APP_DIR" config core.sshCommand "ssh -i $SVC_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
 chown -R "$SVC_USER:$SVC_USER" "$APP_DIR" "$DATA_DIR"
 
 say "Конфигурация"
