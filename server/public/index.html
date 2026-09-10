@@ -211,6 +211,9 @@ td.num{white-space:nowrap}
 @media (max-width:640px){.reqgrid{grid-template-columns:1fr}}
 .reqfield{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .reqfield input{padding:8px 10px;border:1px solid var(--hairline);border-radius:7px;background:var(--surface-2);font-size:13px;text-transform:none;letter-spacing:0;color:var(--ink)}
+.seg.contracttabs{max-width:100%;overflow-x:auto}
+.seg.contracttabs button{white-space:nowrap;font-size:12.5px}
+
 /* ---------- Прайс ---------- */
 .price-cat{font-size:15px;margin:22px 0 8px;color:var(--ink)}
 .price-cat:first-of-type{margin-top:4px}
@@ -377,8 +380,8 @@ const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&l
 const state = {
   me:null, users:[], byId:{},
   route:'trademarks',
-  objects:{trademark:null, patent:null, software:null, shipment:null},
-  reminders:null, trash:null, activity:null, price:null, priceEdit:null,
+  objects:{trademark:null, patent:null, software:null, shipment:null, contract:null},
+  reminders:null, trash:null, activity:null, price:null, priceEdit:null, contractKind:'legal',
   ui:{sort:{key:'holder',dir:1}, status:'', resp:'', flag:'', q:''},
   panel:null,
   bellOpen:false,
@@ -432,6 +435,7 @@ const ROUTES = {
   patents:{title:'Реестр патентов', crumb:'Реестр объектов', type:'patent'},
   software:{title:'Программы для ЭВМ', crumb:'Реестр объектов', type:'software'},
   shipments:{title:'Реестр отправлений', crumb:'Реестр объектов', type:'shipment'},
+  contracts:{title:'Учёт договоров контрагентов', crumb:'Реестр объектов', type:'contract'},
   reminders:{title:'Напоминания о продлении', crumb:'Контроль сроков'},
   payments:{title:'QR для оплаты пошлин', crumb:'Инструменты'},
   price:{title:'Прайс ЭРФИС', crumb:'Инструменты'},
@@ -443,7 +447,7 @@ function go(r){
   state.route = r;
   state.ui.sort = {key:'holder',dir:1};
   state.ui.status=''; state.ui.resp=''; state.ui.flag='';
-  state.priceEdit = null; state.payForm = null;
+  state.priceEdit = null; state.payForm = null; state.contractKind = 'legal';
   history.replaceState(null,'','#/'+r);
   renderAll();
   refresh().catch(e=> toast(e.message, true));
@@ -485,6 +489,7 @@ function renderNav(){
     {r:'patents', label:'Патенты', count:h.patents, ic:'M12 3l8 4-8 4-8-4 8-4Zm-8 9 8 4 8-4M4 16l8 4 8-4'},
     {r:'software', label:'Программы для ЭВМ', count:h.software, ic:'M4 5h16v11H4zM2 20h20M9 16v4M15 16v4'},
     {r:'shipments', label:'Реестр отправлений', count:h.shipments, ic:'M3 8l9-5 9 5-9 5-9-5zM3 8v8l9 5 9-5V8M12 13v8'},
+    {r:'contracts', label:'Договоры контрагентов', count:h.contracts, ic:'M7 3h7l5 5v13H7zM14 3v5h5M9 13h6M9 17h6'},
     {sec:'Контроль сроков'},
     {r:'reminders', label:'Напоминания', count:dueTotal||null, flag:!!dueTotal, ic:'M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'},
     {sec:'Инструменты'},
@@ -537,13 +542,30 @@ const REG = {
     cols:[FLAG_COL, {key:'priorityDate',label:'Дата',cls:'mono num'}, {key:'name',label:'Вид документа',cls:'name'},
       {key:'regNumber',label:'№ объекта',cls:'mono'}, {key:'appNumber',label:'№ делопроизводства',cls:'mono'}, RESP_COL],
   },
+  contract: {
+    label:'Договор контрагента', add:'Добавить запись', title1:'Вид работ / № ТЗ', holderReq:true,
+    cols:[FLAG_COL, {key:'holder',label:'Контрагент',cls:'holder'}, {key:'regNumber',label:'№ договора',cls:'mono'},
+      {key:'name',label:'Вид работ / № ТЗ',cls:'name'}, {key:'workDate',label:'Дата ТЗ',cls:'mono num'},
+      {key:'expiryDate',label:'Срок',cls:'mono num'}, {key:'_stage',label:'Стадия'}, {key:'_act',label:'Акт'},
+      {key:'executor',label:'Исполнитель'}, RESP_COL],
+  },
+};
+const CONTRACT_KINDS = [['legal','Юридические лица'],['individual','Физические лица'],['subscription','Абонентские договоры']];
+const STAGE_TAG = {'выполнено':'active','в процессе':'expiring','стоп':'none','отмена':'expired','отменен':'expired'};
+const CONTRACT_COLS = {
+  legal: REG.contract.cols,
+  individual: [FLAG_COL, {key:'regNumber',label:'№ договора',cls:'mono'}, {key:'holder',label:'Контрагент',cls:'holder'},
+    {key:'name',label:'Вид работ',cls:'name'}, {key:'priorityDate',label:'Дата договора',cls:'mono num'},
+    {key:'notes',label:'Примечание'}, RESP_COL],
+  subscription: [FLAG_COL, {key:'regNumber',label:'№ договора',cls:'mono'}, {key:'holder',label:'Контрагент',cls:'holder'},
+    {key:'name',label:'Вид работ',cls:'name'}, {key:'priorityDate',label:'Дата договора',cls:'mono num'}, RESP_COL],
 };
 const STATUS_RANK = {expired:0, expiring:1, active:2, none:3};
 
 function applyView(list){
   let rows = list.slice();
   const q = state.ui.q.trim().toLowerCase();
-  if(q) rows = rows.filter(it => [it.name,it.holder,it.regNumber,it.appNumber,it.mktuClasses,it.intNo,it.contactPerson,it.email,it.registry]
+  if(q) rows = rows.filter(it => [it.name,it.holder,it.regNumber,it.appNumber,it.mktuClasses,it.intNo,it.contactPerson,it.email,it.registry,it.executor,it.stage]
       .some(v => v && String(v).toLowerCase().includes(q)));
   if(state.ui.status) rows = rows.filter(it => it.status.key===state.ui.status);
   if(state.ui.resp==='_none') rows = rows.filter(it => !it.responsible);
@@ -553,6 +575,8 @@ function applyView(list){
   rows.sort((a,b)=>{
     let x,y;
     if(key==='_status'){ x=STATUS_RANK[a.status.key]; y=STATUS_RANK[b.status.key]; }
+    else if(key==='_stage'){ x=a.stage||'я'; y=b.stage||'я'; }
+    else if(key==='_act'){ x=a.act||''; y=b.act||''; }
     else if(key==='flag'){ x=a.flagged?1:0; y=b.flagged?1:0; }
     else if(key==='responsible'){ x=userName(a.responsible)||'я'; y=userName(b.responsible)||'я'; }
     else { x=a[key]; y=b[key]; }
@@ -573,12 +597,14 @@ function rowHtml(it, cols){
       return '<td></td>';
     }
     if(c.key==='_status') return `<td><span class="tag ${it.status.key}"><span class="pip"></span>${esc(it.status.label)}</span></td>`;
+    if(c.key==='_stage'){ if(!it.stage) return '<td>—</td>'; return `<td><span class="tag ${STAGE_TAG[it.stage]||'none'}"><span class="pip"></span>${esc(it.stage)}</span></td>`; }
+    if(c.key==='_act') return `<td>${it.act==='да'?'<span class="tag active"><span class="pip"></span>есть</span>':it.act?esc(it.act):'—'}</td>`;
     if(c.key==='objectType') return `<td><span class="otype" title="${OTYPE[it.objectType]||''}">${esc(it.objectType||'—')}</span></td>`;
     if(c.key==='responsible'){
       const n = userName(it.responsible);
       return `<td><span class="respcell">${n?`<span class="avatar sm">${esc(userInit(it.responsible))}</span>${esc(firstName(n))}`:`<span class="avatar sm dim">—</span><span style="color:var(--ink-3)">не назначен</span>`}</span></td>`;
     }
-    if(c.key==='priorityDate'||c.key==='expiryDate') return `<td class="${c.cls||''}">${fmt(it[c.key])}</td>`;
+    if(c.key==='priorityDate'||c.key==='expiryDate'||c.key==='workDate') return `<td class="${c.cls||''}">${fmt(it[c.key])}</td>`;
     return `<td class="${c.cls||''}">${esc(it[c.key]||'—')}</td>`;
   };
   return `<tr data-id="${it.id}" class="${it.flagged?'flag':''}">${cols.map(cell).join('')}</tr>`;
@@ -587,14 +613,23 @@ function rowHtml(it, cols){
 function renderRegistry(){
   const type = ROUTES[state.route].type;
   const cfg = REG[type];
-  const cols = cfg.cols;
-  const list = state.objects[type];
+  let cols = cfg.cols;
+  let list = state.objects[type];
   if(!list){ $('#view').innerHTML = '<div class="pageloader">Загрузка…</div>'; return; }
+  let tabsHtml = '';
+  let kind = null;
+  if(type==='contract'){
+    kind = state.contractKind || 'legal';
+    cols = CONTRACT_COLS[kind];
+    list = list.filter(o => o.contractKind===kind);
+    tabsHtml = `<div class="seg contracttabs" style="margin-bottom:14px">${CONTRACT_KINDS.map(([k,l])=>`<button data-ck="${k}" aria-pressed="${kind===k}">${l} · ${state.objects.contract.filter(o=>o.contractKind===k).length}</button>`).join('')}</div>`;
+  }
   const rows = applyView(list);
   const respOpts = ['<option value="">Ответственный: все</option>','<option value="_none">— не назначен</option>',
     ...state.users.map(u=>`<option value="${u.id}">${esc(u.name)}</option>`)].join('');
 
   $('#view').innerHTML = `
+    ${tabsHtml}
     <div class="toolbar">
       ${cfg.noStatus ? '' : `<div class="chipfilter">Статус
         <select id="f-status">
@@ -638,8 +673,9 @@ function renderRegistry(){
     renderRegistry();
   });
   document.querySelectorAll('tbody tr[data-id]').forEach(tr=> tr.onclick=()=> openDetail(tr.dataset.id));
+  document.querySelectorAll('#view [data-ck]').forEach(b=> b.onclick=()=>{ state.contractKind=b.dataset.ck; state.ui.q=''; $('#search').value=''; renderRegistry(); });
   $('#addbtn').onclick = ()=> openCreate(type);
-  $('#exportbtn').onclick = ()=> { window.open('/api/export?type='+type, '_blank'); };
+  $('#exportbtn').onclick = ()=> { window.open('/api/export?type='+type + (kind?'&kind='+kind:''), '_blank'); };
 }
 
 /* ---------- detail / edit panel ---------- */
@@ -657,13 +693,14 @@ function openCreate(type){
   renderPanel();
 }
 function blankDraft(type){
-  const b = {name:'', responsible:state.me.id, notes:'', holder:'', appNumber:'', regNumber:'', priorityDate:'', expiryDate:'', documentRef:'', objectType:'', mktuClasses:'', intNo:'', contactPerson:'', email:'', registry:'', actWhen:''};
+  const b = {name:'', responsible:state.me.id, notes:'', holder:'', appNumber:'', regNumber:'', priorityDate:'', expiryDate:'', documentRef:'', objectType:'', mktuClasses:'', intNo:'', contactPerson:'', email:'', registry:'', actWhen:'', contractKind:'', workDate:'', stage:'', act:'', executor:''};
   if(type==='patent') b.objectType = 'ИЗ';
   if(type==='software') b.registry = 'Роспатент';
   if(type==='shipment') b.priorityDate = new Date().toISOString().slice(0,10);
+  if(type==='contract') b.contractKind = state.contractKind || 'legal';
   return b;
 }
-const DRAFT_KEYS = ['holder','name','appNumber','regNumber','objectType','mktuClasses','priorityDate','expiryDate','documentRef','notes','intNo','contactPerson','email','registry','actWhen'];
+const DRAFT_KEYS = ['holder','name','appNumber','regNumber','objectType','mktuClasses','priorityDate','expiryDate','documentRef','notes','intNo','contactPerson','email','registry','actWhen','contractKind','workDate','stage','act','executor'];
 function closePanel(){
   state.panel = null;
   $('#scrim').classList.remove('open');
@@ -672,9 +709,10 @@ function closePanel(){
 function maybeDiscard(){ if(confirm('Закрыть без сохранения изменений?')) closePanel(); }
 
 function recommendedDate(o){
-  if(!o.expiryDate) return new Date(Date.now()+DAY).toISOString().slice(0,10);
-  const rec = new Date(new Date(o.expiryDate+'T00:00:00').getTime() - 183*DAY);
-  return rec < new Date() ? new Date(Date.now()+DAY).toISOString().slice(0,10) : rec.toISOString().slice(0,10);
+  const tomorrow = new Date(Date.now()+DAY).toISOString().slice(0,10);
+  if(!o.expiryDate || !/^\d{4}-\d{2}-\d{2}/.test(o.expiryDate)) return tomorrow;
+  const rec = new Date(new Date(o.expiryDate.slice(0,10)+'T00:00:00').getTime() - 183*DAY);
+  return (isNaN(rec) || rec < new Date()) ? tomorrow : rec.toISOString().slice(0,10);
 }
 
 function panelBody(type, f){
@@ -697,6 +735,24 @@ function panelBody(type, f){
     f('Вид документа','name',{type:'textarea'}),
     g2(f('Номер объекта','regNumber',{mono:true}), f('№ делопроизводства','appNumber',{mono:true})),
   ].join('');
+  if(type==='contract'){
+    const src = state.panel.mode!=='view' ? state.panel.draft : state.panel.obj;
+    const k = (src && src.contractKind) || 'legal';
+    const base = [
+      f('Тип договора','contractKind',{type:'select',options:CONTRACT_KINDS}),
+      f('Контрагент','holder'),
+      g2(f('№ договора','regNumber',{mono:true}), f('Дата договора','priorityDate',{type:'date',mono:true,fmt:true})),
+    ];
+    if(k!=='legal') return [...base, f('Вид работ','name',{type:'textarea'})].join('');
+    return [...base,
+      f('Вид работ / № ТЗ','name',{type:'textarea'}),
+      g2(f('Дата ТЗ','workDate',{type:'date',mono:true,fmt:true}), f('Срок','expiryDate',{type:'date',mono:true,fmt:true})),
+      g2(f('Стадия','stage',{type:'select',options:[['','—'],['в процессе','в процессе'],['выполнено','выполнено'],['стоп','стоп'],['отмена','отмена']]}),
+         f('Акт','act',{type:'select',options:[['','—'],['да','да'],['нет','нет']]})),
+      f('Исполнитель','executor',{ph:'кто вёл работу'}),
+      g2(f('Контактное лицо','contactPerson'), f('E-mail контакта','email')),
+    ].join('');
+  }
   return [ // trademark
     f('Название объекта','name'), f('Правообладатель','holder'),
     f('№ заявки','appNumber',{mono:true}), f('№ регистрации','regNumber',{mono:true}),
@@ -773,7 +829,7 @@ function renderPanel(){
   p.innerHTML = `
     <header>
       <div>
-        <div class="eyebrow">${esc(REG[type].label)}${st?` · <span style="color:var(--${st.key==='active'?'ok':st.key==='expired'?'crit':'warn'})">${esc(st.label)}</span>`:''}</div>
+        <div class="eyebrow">${esc(REG[type].label)}${st && st.key!=='none' ? ` · <span style="color:var(--${st.key==='active'?'ok':st.key==='expired'?'crit':'warn'})">${esc(st.label)}</span>` : ''}</div>
         <h2>${ps.mode==='create' ? ('Новое: '+REG[type].label.toLowerCase()) : esc(src.name||'Без названия')}</h2>
       </div>
       <button class="close" id="pclose" aria-label="Закрыть">✕</button>

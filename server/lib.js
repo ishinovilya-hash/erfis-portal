@@ -75,8 +75,9 @@ export function todayISO() {
 }
 
 export function daysLeft(expiry) {
-  if (!expiry) return null;
-  const e = new Date(expiry + 'T00:00:00Z').getTime();
+  if (!expiry || !/^\d{4}-\d{2}-\d{2}/.test(expiry)) return null;
+  const e = new Date(expiry.slice(0, 10) + 'T00:00:00Z').getTime();
+  if (Number.isNaN(e)) return null;
   const t = new Date(todayISO() + 'T00:00:00Z').getTime();
   return Math.round((e - t) / DAY);
 }
@@ -95,7 +96,8 @@ export function reminderDue(r) {
 }
 
 // доп. поля, хранящиеся в objects.extra (JSON)
-export const EXTRA_KEYS = ['intNo', 'contactPerson', 'email', 'registry', 'actWhen'];
+export const EXTRA_KEYS = ['intNo', 'contactPerson', 'email', 'registry', 'actWhen',
+  'contractKind', 'workDate', 'stage', 'act', 'executor'];
 
 // DB row (snake_case) -> API object (camelCase) + computed fields
 export function rowToApi(row) {
@@ -123,6 +125,11 @@ export function rowToApi(row) {
     email: extra.email || '',
     registry: extra.registry || '',
     actWhen: extra.actWhen || '',
+    contractKind: extra.contractKind || '',
+    workDate: extra.workDate || null,
+    stage: extra.stage || '',
+    act: extra.act || '',
+    executor: extra.executor || '',
     status: statusOf(row.expiry_date),
     flagged: reminderDue(reminder),
     createdAt: row.created_at,
@@ -166,6 +173,11 @@ export const FIELD_LABELS = {
   email: 'e-mail',
   registry: 'реестр',
   actWhen: 'когда обратиться',
+  workDate: 'дата ТЗ',
+  stage: 'стадия',
+  act: 'акт',
+  executor: 'исполнитель',
+  contractKind: 'тип договора',
 };
 
 export function initialsOf(name) {

@@ -13,7 +13,7 @@ import {
   rowToApi, EDITABLE, EXTRA_KEYS, FIELD_LABELS, initialsOf,
 } from './lib.js';
 
-const OBJECT_TYPES = ['trademark', 'patent', 'software', 'shipment'];
+const OBJECT_TYPES = ['trademark', 'patent', 'software', 'shipment', 'contract'];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(__dirname, 'public');
@@ -117,14 +117,14 @@ route('POST', '/api/password', async (req, res) => {
 });
 
 // ---- registry ----
-const TYPE_PREFIX = { trademark: 'tm', patent: 'pt', software: 'sw', shipment: 'sh' };
+const TYPE_PREFIX = { trademark: 'tm', patent: 'pt', software: 'sw', shipment: 'sh', contract: 'ct' };
 
 route('GET', '/api/objects', async (req, res, _p, url) => {
   const u = currentUser(req);
   if (!u) return json(res, 401, { error: 'auth' });
   const type = url.searchParams.get('type');
   if (!OBJECT_TYPES.includes(type)) return json(res, 400, { error: 'type' });
-  const order = type === 'shipment' ? 'priority_date DESC, id DESC' : 'holder, name';
+  const order = type === 'shipment' ? 'priority_date DESC, id DESC' : type === 'contract' ? 'holder, id' : 'holder, name';
   const rows = db.prepare(`SELECT * FROM objects WHERE type = ? AND deleted_at IS NULL ORDER BY ${order}`).all(type);
   json(res, 200, { objects: rows.map(rowToApi) });
 });
@@ -309,13 +309,16 @@ route('GET', '/api/export', async (req, res, _p, url) => {
   if (!u) return text(res, 401, 'auth');
   const type = url.searchParams.get('type');
   if (!OBJECT_TYPES.includes(type)) return text(res, 400, 'type');
-  const order = type === 'shipment' ? 'priority_date DESC, id DESC' : 'holder, name';
-  const rows = db.prepare(`SELECT * FROM objects WHERE type = ? AND deleted_at IS NULL ORDER BY ${order}`).all(type).map(rowToApi);
+  const order = type === 'shipment' ? 'priority_date DESC, id DESC' : type === 'contract' ? 'holder, id' : 'holder, name';
+  const kind = url.searchParams.get('kind');
+  let rows = db.prepare(`SELECT * FROM objects WHERE type = ? AND deleted_at IS NULL ORDER BY ${order}`).all(type).map(rowToApi);
+  if (type === 'contract' && kind) rows = rows.filter((r) => r.contractKind === kind);
   const COLS = {
     trademark: [['holder', 'Правообладатель'], ['appNumber', '№ заявки'], ['name', 'Название'], ['regNumber', '№ регистрации'], ['mktuClasses', 'Классы МКТУ'], ['priorityDate', 'Приоритет'], ['expiryDate', 'Действует до'], ['status', 'Статус'], ['responsible', 'Ответственный']],
     patent: [['holder', 'Правообладатель'], ['objectType', 'Вид'], ['name', 'Название'], ['appNumber', '№ заявки'], ['regNumber', '№ патента'], ['priorityDate', 'Приоритет'], ['expiryDate', 'Действует до'], ['status', 'Статус'], ['responsible', 'Ответственный']],
     software: [['intNo', 'Вн. №'], ['name', 'Название'], ['regNumber', '№ регистрации'], ['holder', 'Правообладатель'], ['contactPerson', 'Контактное лицо'], ['email', 'E-mail'], ['registry', 'Реестр'], ['actWhen', 'Когда обратиться'], ['responsible', 'Ответственный']],
     shipment: [['priorityDate', 'Дата'], ['name', 'Вид документа'], ['regNumber', '№ объекта'], ['appNumber', '№ делопроизводства'], ['responsible', 'Ответственный']],
+    contract: [['holder', 'Контрагент'], ['regNumber', '№ договора'], ['name', 'Вид работ / № ТЗ'], ['workDate', 'Дата ТЗ'], ['expiryDate', 'Срок'], ['stage', 'Стадия'], ['act', 'Акт'], ['executor', 'Исполнитель'], ['responsible', 'Ответственный']],
   };
   const cols = COLS[type];
   const nameOf = (id) => EMPLOYEES.find((e) => e.id === id)?.name || '';
@@ -571,6 +574,7 @@ route('GET', '/api/health', async (_req, res) => {
     patents: c("SELECT COUNT(*) c FROM objects WHERE type='patent' AND deleted_at IS NULL"),
     software: c("SELECT COUNT(*) c FROM objects WHERE type='software' AND deleted_at IS NULL"),
     shipments: c("SELECT COUNT(*) c FROM objects WHERE type='shipment' AND deleted_at IS NULL"),
+    contracts: c("SELECT COUNT(*) c FROM objects WHERE type='contract' AND deleted_at IS NULL"),
     price: c('SELECT COUNT(*) c FROM price_items'),
     trash: c('SELECT COUNT(*) c FROM objects WHERE deleted_at IS NOT NULL'),
     activity: c('SELECT COUNT(*) c FROM activity'),
@@ -627,6 +631,16 @@ route('POST', '/api/admin/import', async (req, res) => {
     for (const sh of raw.shipments || []) {
       ins.run({ ...D, id: sh.id, type: 'shipment', name: s(sh.docType), reg_number: s(sh.objectNumber),
         app_number: s(sh.caseNumber), priority_date: s(sh.date), now }); n++;
+    }
+    for (const ct of raw.contracts || []) {
+      ins.run({ ...D, id: ct.id, type: 'contract', holder: s(ct.contragent),
+        name: s(ct.workDesc) || ('Договор ' + s(ct.contractNo || '')).trim(),
+        reg_number: s(ct.contractNo), priority_date: s(ct.contractDate), expiry_date: s(ct.deadline),
+        extra: JSON.stringify({ contractKind: s(ct.kind), workDate: s(ct.workDate), stage: s(ct.stage),
+          act: s(ct.act), executor: s(ct.executor), contactPerson: s(ct.contactName), email: s(ct.contactEmail) }), now }); n++;
+    }
+    for (const ct of (raw.contracts || []).filter((x) => x.note)) {
+      db.prepare('UPDATE objects SET notes = ? WHERE id = ?').run(s(ct.note), ct.id);
     }
     if (Array.isArray(raw.price) && raw.price.length) {
       db.prepare('DELETE FROM price_items').run();

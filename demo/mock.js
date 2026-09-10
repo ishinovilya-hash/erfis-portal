@@ -1,7 +1,7 @@
 /* Демо-режим портала ЭРФИС: подменяет /api/* на локальное хранилище браузера.
    Данные не уходят на сервер. Всё живёт в этом браузере (localStorage). */
 (function () {
-  const KEY = 'erfis_demo_v5';
+  const KEY = 'erfis_demo_v6';
   const nowISO = () => new Date().toISOString();
   const todayMSK = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
   const DAY = 86400000, SOON = 183;
@@ -21,12 +21,13 @@
   };
 
   function seed() {
-    const raw = window.__SEED || { trademarks: [], patents: [], software: [], shipments: [] };
+    const raw = window.__SEED || { trademarks: [], patents: [], software: [], shipments: [], contracts: [] };
     const s = (v) => (v == null ? '' : String(v).trim());
     const O = (o) => Object.assign({
       id: '', type: '', holder: '', name: '', appNumber: '', regNumber: '', objectType: '', mktuClasses: '',
       priorityDate: '', expiryDate: '', documentRef: '', documentUrl: '', responsible: null, notes: '', reminder: null,
       intNo: '', contactPerson: '', email: '', registry: '', actWhen: '',
+      contractKind: '', workDate: '', stage: '', act: '', executor: '',
       createdAt: nowISO(), updatedAt: nowISO(), deletedAt: null, deletedBy: null,
     }, o);
     const objects = [];
@@ -49,6 +50,13 @@
     (raw.shipments || []).forEach((sh) => objects.push(O({
       id: sh.id, type: 'shipment', name: s(sh.docType), regNumber: s(sh.objectNumber),
       appNumber: s(sh.caseNumber), priorityDate: s(sh.date),
+    })));
+    (raw.contracts || []).forEach((ct) => objects.push(O({
+      id: ct.id, type: 'contract', holder: s(ct.contragent),
+      name: s(ct.workDesc) || ('Договор ' + s(ct.contractNo || '')).trim(),
+      regNumber: s(ct.contractNo), priorityDate: s(ct.contractDate), expiryDate: s(ct.deadline),
+      contractKind: s(ct.kind), workDate: s(ct.workDate), stage: s(ct.stage), act: s(ct.act),
+      executor: s(ct.executor), contactPerson: s(ct.contactName), email: s(ct.contactEmail), notes: s(ct.note),
     })));
     const setRem = (id, days, note, by) => {
       const o = objects.find((x) => x.id === id); if (!o) return;
@@ -73,7 +81,11 @@
 
   const uById = (id) => USERS.find((u) => u.id === id);
   const me = () => (db.session ? uById(db.session) : null);
-  const daysLeft = (e) => (!e ? null : Math.round((new Date(e + 'T00:00:00Z') - new Date(todayMSK() + 'T00:00:00Z')) / DAY));
+  const daysLeft = (e) => {
+    if (!e || !/^\d{4}-\d{2}-\d{2}/.test(e)) return null;
+    const t = new Date(e.slice(0, 10) + 'T00:00:00Z') - new Date(todayMSK() + 'T00:00:00Z');
+    return Number.isNaN(t) ? null : Math.round(t / DAY);
+  };
   function statusOf(e) {
     const dl = daysLeft(e);
     if (dl === null) return { key: 'none', label: 'Без срока', daysLeft: null };
@@ -86,7 +98,7 @@
   const logAct = (kind, o, text) => { db.activity.push({ id: db.seq.activity++, at: nowISO(), kind, objectId: o && o.id, objectType: o && o.type, text, userId: db.session }); };
   const J = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
   const T = (body, status = 200) => new Response(body, { status, headers: { 'Content-Type': 'text/csv;charset=utf-8' } });
-  const EDIT_KEYS = ['holder', 'name', 'appNumber', 'regNumber', 'objectType', 'mktuClasses', 'priorityDate', 'expiryDate', 'documentRef', 'notes', 'intNo', 'contactPerson', 'email', 'registry', 'actWhen'];
+  const EDIT_KEYS = ['holder', 'name', 'appNumber', 'regNumber', 'objectType', 'mktuClasses', 'priorityDate', 'expiryDate', 'documentRef', 'notes', 'intNo', 'contactPerson', 'email', 'registry', 'actWhen', 'contractKind', 'workDate', 'stage', 'act', 'executor'];
   const LBL = { holder: 'правообладатель', name: 'название', appNumber: '№ заявки', regNumber: '№ регистрации/патента', objectType: 'вид', mktuClasses: 'классы МКТУ', priorityDate: 'дата', expiryDate: 'срок', documentRef: 'документ', notes: 'примечание', intNo: 'внутренний №', contactPerson: 'контактное лицо', email: 'e-mail', registry: 'реестр', actWhen: 'когда обратиться', responsible: 'ответственный' };
 
   const realFetch = window.fetch.bind(window);
@@ -126,8 +138,8 @@
       }
       if (path === '/objects' && method === 'POST') {
         if (!String(body.name || '').trim()) return J({ error: 'Заполните название' }, 400);
-        if ((body.type === 'trademark' || body.type === 'patent') && !String(body.holder || '').trim()) return J({ error: 'Заполните правообладателя' }, 400);
-        const pfx = { trademark: 'tm', patent: 'pt', software: 'sw', shipment: 'sh' }[body.type];
+        if ((body.type === 'trademark' || body.type === 'patent' || body.type === 'contract') && !String(body.holder || '').trim()) return J({ error: 'Заполните ' + (body.type === 'contract' ? 'контрагента' : 'правообладателя') }, 400);
+        const pfx = { trademark: 'tm', patent: 'pt', software: 'sw', shipment: 'sh', contract: 'ct' }[body.type];
         const o = { id: pfx + '-n' + Math.random().toString(36).slice(2, 7), type: body.type, responsible: null, reminder: null, createdAt: nowISO(), updatedAt: nowISO(), deletedAt: null, deletedBy: null };
         EDIT_KEYS.forEach((k) => o[k] = String(body[k] ?? '').trim());
         o.responsible = body.responsible || null;
@@ -184,7 +196,9 @@
           patent: [['holder', 'Правообладатель'], ['objectType', 'Вид'], ['name', 'Название'], ['appNumber', '№ заявки'], ['regNumber', '№ патента'], ['priorityDate', 'Приоритет'], ['expiryDate', 'Действует до'], ['status', 'Статус'], ['responsible', 'Ответственный']],
           software: [['intNo', 'Вн. №'], ['name', 'Название'], ['regNumber', '№ регистрации'], ['holder', 'Правообладатель'], ['contactPerson', 'Контактное лицо'], ['email', 'E-mail'], ['registry', 'Реестр'], ['actWhen', 'Когда обратиться'], ['responsible', 'Ответственный']],
           shipment: [['priorityDate', 'Дата'], ['name', 'Вид документа'], ['regNumber', '№ объекта'], ['appNumber', '№ делопроизводства'], ['responsible', 'Ответственный']],
+          contract: [['holder', 'Контрагент'], ['regNumber', '№ договора'], ['name', 'Вид работ / № ТЗ'], ['workDate', 'Дата ТЗ'], ['expiryDate', 'Срок'], ['stage', 'Стадия'], ['act', 'Акт'], ['executor', 'Исполнитель'], ['responsible', 'Ответственный']],
         }[type];
+        if (type === 'contract' && q.get('kind')) rows = rows.filter((r) => r.contractKind === q.get('kind'));
         const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
         const cell = (o, k) => k === 'status' ? o.status.label : k === 'responsible' ? (uById(o.responsible)?.name || '') : o[k] || '';
         return T('﻿' + [C.map((c) => esc(c[1])).join(';'), ...rows.map((o) => C.map((c) => esc(cell(o, c[0]))).join(';'))].join('\r\n'));
@@ -198,6 +212,7 @@
           patents: act.filter((o) => o.type === 'patent').length,
           software: act.filter((o) => o.type === 'software').length,
           shipments: act.filter((o) => o.type === 'shipment').length,
+          contracts: act.filter((o) => o.type === 'contract').length,
           price: db.price.length,
           trash: db.objects.filter((o) => o.deletedAt).length,
           activity: db.activity.length,
