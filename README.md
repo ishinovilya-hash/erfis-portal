@@ -17,7 +17,7 @@
 В VNC-консоли VM (под root):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OWNER/REPO/main/deploy/setup.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ishinovilya-hash/erfis-portal/main/deploy/setup.sh | sudo bash
 ```
 
 Скрипт ставит Node, cloudflared, разворачивает код в `/opt/erfis-portal`,
@@ -40,7 +40,7 @@ curl -X POST "$PORTAL_URL/api/admin/import" \
 
 ```bash
 # на сервере
-curl -fsSL https://raw.githubusercontent.com/OWNER/REPO/main/deploy/setup.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ishinovilya-hash/erfis-portal/main/deploy/setup.sh | sudo bash
 # или удалённо, если знаем DEPLOY_KEY:
 curl -X POST "$PORTAL_URL/api/admin/pull" -H "x-deploy-key: $DEPLOY_KEY"
 ```

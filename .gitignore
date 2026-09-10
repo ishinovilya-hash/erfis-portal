@@ -5,6 +5,10 @@ server/data/*.db-wal
 server/data/initial-passwords.txt
 server/data/tunnel-url
 server/data/_logo.json
+
+# данные клиентов — не в репозиторий, загружаются на сервер отдельно (POST /api/admin/import)
+server/data/seed.json
+server/data/price-seed.json
 *.log
 .DS_Store
 
