@@ -108,6 +108,12 @@ if (!tableCols('users').includes('is_manager')) {
 if (!tableCols('objects').includes('extra')) {
   db.exec("ALTER TABLE objects ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'");
 }
+if (!tableCols('users').includes('failed_attempts')) {
+  db.exec('ALTER TABLE users ADD COLUMN failed_attempts INTEGER NOT NULL DEFAULT 0');
+}
+if (!tableCols('users').includes('locked_at')) {
+  db.exec('ALTER TABLE users ADD COLUMN locked_at TEXT');
+}
 
 // ---------- password helpers (scrypt, no native deps) ----------
 export function hashPassword(pw) {

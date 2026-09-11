@@ -78,12 +78,26 @@ const route = (method, pattern, handler) => {
 };
 
 // ---- session ----
+const MAX_LOGIN_ATTEMPTS = 3;
 route('POST', '/api/login', async (req, res) => {
   const { email, password } = await readBody(req);
   const u = db.prepare('SELECT * FROM users WHERE lower(email) = lower(?)').get(String(email || '').trim());
+  if (u && u.locked_at) {
+    return json(res, 423, { error: 'Аккаунт заблокирован после нескольких неверных попыток входа. Обратитесь к администратору для разблокировки.' });
+  }
   if (!u || !verifyPassword(String(password || ''), u.pass_hash)) {
+    if (u) {
+      const attempts = (u.failed_attempts || 0) + 1;
+      if (attempts >= MAX_LOGIN_ATTEMPTS) {
+        db.prepare('UPDATE users SET failed_attempts = ?, locked_at = ? WHERE id = ?').run(attempts, new Date().toISOString(), u.id);
+        logActivity('lock', null, `Аккаунт заблокирован после ${attempts} неверных попыток входа (${u.email})`, u.id);
+        return json(res, 423, { error: 'Аккаунт заблокирован после нескольких неверных попыток входа. Обратитесь к администратору для разблокировки.' });
+      }
+      db.prepare('UPDATE users SET failed_attempts = ? WHERE id = ?').run(attempts, u.id);
+    }
     return json(res, 401, { error: 'Неверный email или пароль' });
   }
+  if (u.failed_attempts) db.prepare('UPDATE users SET failed_attempts = 0 WHERE id = ?').run(u.id);
   const token = randomBytes(32).toString('hex');
   const now = new Date().toISOString();
   db.prepare('INSERT INTO sessions (token,user_id,created_at,last_seen) VALUES (?,?,?,?)').run(token, u.id, now, now);
@@ -661,12 +675,27 @@ route('POST', '/api/admin/passwords', async (req, res) => {
   const out = [];
   for (const e of EMPLOYEES) {
     const pw = randomBytes(6).toString('base64url');
-    db.prepare('UPDATE users SET pass_hash = ?, must_change = 1 WHERE id = ?').run(hashPassword(pw), e.id);
+    db.prepare('UPDATE users SET pass_hash = ?, must_change = 1, failed_attempts = 0, locked_at = NULL WHERE id = ?').run(hashPassword(pw), e.id);
     out.push({ email: e.email, name: e.name, password: pw });
   }
   db.prepare('DELETE FROM sessions').run();
   logActivity('password', null, 'Сброшены пароли всех сотрудников (админ)', null);
   json(res, 200, { users: out });
+});
+
+route('POST', '/api/admin/unlock', async (req, res) => {
+  if (!DEPLOY_KEY || req.headers['x-deploy-key'] !== DEPLOY_KEY) return json(res, 403, { error: 'forbidden' });
+  const body = await readBody(req).catch(() => ({}));
+  if (body && body.email) {
+    const u = db.prepare('SELECT * FROM users WHERE lower(email) = lower(?)').get(String(body.email).trim());
+    if (!u) return json(res, 404, { error: 'user not found' });
+    db.prepare('UPDATE users SET failed_attempts = 0, locked_at = NULL WHERE id = ?').run(u.id);
+    logActivity('unlock', null, `Аккаунт разблокирован (админ): ${u.email}`, null);
+    return json(res, 200, { unlocked: u.email });
+  }
+  db.prepare('UPDATE users SET failed_attempts = 0, locked_at = NULL').run();
+  logActivity('unlock', null, 'Разблокированы все аккаунты (админ)', null);
+  json(res, 200, { unlocked: 'all' });
 });
 
 route('GET', '/api/admin/logs', async (req, res) => {
