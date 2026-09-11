@@ -13,6 +13,7 @@ import {
   json, text, readBody, parseCookies, setCookie, todayISO,
   rowToApi, EDITABLE, EXTRA_KEYS, FIELD_LABELS, initialsOf,
 } from './lib.js';
+import { buildSoprovod, soprovodFilename, soprovodAvailable } from './soprovod.js';
 
 const OBJECT_TYPES = ['trademark', 'patent', 'software', 'shipment', 'contract'];
 
@@ -175,6 +176,33 @@ route('GET', '/api/objects/:id', async (req, res, p) => {
   const row = getObj(p.id);
   if (!row) return json(res, 404, { error: 'not found' });
   json(res, 200, { object: rowToApi(row), activity: objectActivity(p.id) });
+});
+
+route('GET', '/api/objects/:id/soprovod', async (req, res, p, url) => {
+  const u = currentUser(req);
+  if (!u) return text(res, 401, 'auth');
+  const row = getObj(p.id);
+  if (!row || row.type !== 'patent') return text(res, 404, 'not found');
+  if (!soprovodAvailable(row.object_type)) {
+    return text(res, 400, 'Вид объекта не указан (ПМ / ИЗ / ПО) — нечего подставлять в письмо');
+  }
+  const outNo = (url.searchParams.get('outNo') || 'б/н').trim() || 'б/н';
+  const outDateIso = url.searchParams.get('outDate') || todayISO();
+  const buf = buildSoprovod({
+    objectType: row.object_type,
+    patentNo: row.reg_number,
+    outNo,
+    outDate: fmtDate(outDateIso),
+  });
+  const filename = soprovodFilename({ objectType: row.object_type, patentNo: row.reg_number });
+  logActivity('soprovod', row, `Сформировано сопроводительное письмо в ФИПС (исх. №${outNo} от ${fmtDate(outDateIso)})`, u.id);
+  res.writeHead(200, {
+    'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'Content-Disposition': `attachment; filename="soprovod.docx"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    'Content-Length': buf.length,
+    'Cache-Control': 'no-store',
+  });
+  res.end(buf);
 });
 
 route('PATCH', '/api/objects/:id', async (req, res, p) => {

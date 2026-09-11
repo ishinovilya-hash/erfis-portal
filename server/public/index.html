@@ -775,6 +775,20 @@ function renderPanel(){
 
   const docField = `<div class="field disabledwrap"><label>Документ (свидетельство / патент)</label><div class="val">${esc(src.documentRef)||'—'}</div><div class="hint">Загрузка PDF и ссылки на облако появятся позже — поле уже предусмотрено.</div></div>`;
 
+  let soprovodHtml = '';
+  if(ps.mode==='view' && type==='patent' && ps.obj && ['ПМ','ИЗ','ПО'].includes(ps.obj.objectType)){
+    soprovodHtml = `<div class="reminderbox"><div class="rb-head">📄 Сопроводительное письмо в ФИПС</div><div class="rb-body">
+      <div class="hint" style="margin-bottom:10px">Подставит № патента и вид объекта (${esc(OTYPE[ps.obj.objectType])}) в шаблон письма об оплате пошлины за продление.</div>
+      <div class="grid2">
+        <div><label>Исх. №</label><input type="text" id="sop-outno" value="б/н"/></div>
+        <div><label>от (дата)</label><input type="date" id="sop-outdate" value="${new Date().toISOString().slice(0,10)}"/></div>
+      </div>
+      <button class="btn primary" style="margin-top:12px" id="sop-go">Скачать письмо (.docx)</button>
+    </div></div>`;
+  } else if(ps.mode==='view' && type==='patent' && ps.obj && !ps.obj.objectType){
+    soprovodHtml = `<div class="hint" style="margin:14px 0">Чтобы сформировать сопроводительное письмо в ФИПС, сначала укажите вид объекта (ПМ / ИЗ / ПО).</div>`;
+  }
+
   let reminderHtml = '';
   if(ps.mode!=='create' && ps.obj){
     const o = ps.obj, rem = o.reminder, due = o.flagged;
@@ -824,6 +838,7 @@ function renderPanel(){
       ${respField}
       ${f('Примечание','notes',{type:'textarea'})}
       ${hasDoc ? docField : ''}
+      ${editing ? '' : soprovodHtml}
       ${editing ? '' : reminderHtml}
       ${editing ? '' : `<div class="field"><label>История по объекту</label>${actList}</div>`}
     </div>
@@ -852,6 +867,13 @@ function renderPanel(){
   };
   if(q('#rem-ok')) q('#rem-ok').onclick = ()=> doReminder('POST', ps.obj.id+'/reminder/ack');
   if(q('#rem-del')) q('#rem-del').onclick = ()=> doReminder('DELETE', ps.obj.id);
+  if(q('#sop-go')) q('#sop-go').onclick = ()=>{
+    const outNo = q('#sop-outno').value.trim() || 'б/н';
+    const outDate = q('#sop-outdate').value;
+    if(!outDate){ toast('Укажите дату', true); return; }
+    const url = '/api/objects/'+ps.obj.id+'/soprovod?outNo='+encodeURIComponent(outNo)+'&outDate='+encodeURIComponent(outDate);
+    window.open(url, '_blank');
+  };
 }
 function draftFrom(o){
   const d = {responsible:o.responsible||''};
