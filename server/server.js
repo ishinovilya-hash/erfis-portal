@@ -606,6 +606,61 @@ route('GET', '/api/price/export', async (req, res) => {
   res.end(csv);
 });
 
+// ---- библиотека кейсов ----
+const caseApi = (r) => ({
+  id: r.id, category: r.category, title: r.title, caseNumber: r.case_number,
+  summary: r.summary, result: r.result, responsible: r.responsible,
+  createdBy: r.created_by, createdAt: r.created_at, updatedAt: r.updated_at,
+});
+
+route('GET', '/api/cases', async (req, res) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const rows = db.prepare('SELECT * FROM cases ORDER BY created_at DESC').all();
+  json(res, 200, { cases: rows.map(caseApi) });
+});
+
+route('POST', '/api/cases', async (req, res) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const b = await readBody(req);
+  if (!String(b.title || '').trim()) return json(res, 400, { error: 'Укажите название кейса' });
+  const id = 'case-n' + randomBytes(4).toString('hex');
+  const now = new Date().toISOString();
+  db.prepare(`INSERT INTO cases (id,category,title,case_number,summary,result,responsible,created_by,created_at,updated_at)
+    VALUES (@id,@category,@title,@case_number,@summary,@result,@responsible,@created_by,@now,@now)`).run({
+    id, category: String(b.category || 'court').trim(), title: String(b.title).trim(),
+    case_number: String(b.caseNumber || '').trim(), summary: String(b.summary || '').trim(),
+    result: String(b.result || '').trim(), responsible: b.responsible || null, created_by: u.id, now,
+  });
+  logActivity('case', null, `Добавлен кейс в библиотеку: «${String(b.title).slice(0, 60)}»`, u.id);
+  json(res, 200, { case: caseApi(db.prepare('SELECT * FROM cases WHERE id = ?').get(id)) });
+});
+
+route('PATCH', '/api/cases/:id', async (req, res, p) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const row = db.prepare('SELECT * FROM cases WHERE id = ?').get(p.id);
+  if (!row) return json(res, 404, { error: 'not found' });
+  const b = await readBody(req);
+  const F = { category: 'category', title: 'title', caseNumber: 'case_number', summary: 'summary', result: 'result', responsible: 'responsible' };
+  const sets = [], args = { id: row.id, now: new Date().toISOString() };
+  for (const [api, col] of Object.entries(F)) {
+    if (!(api in b)) continue;
+    const v = api === 'responsible' ? (b[api] || null) : String(b[api] ?? '');
+    if (v !== row[col]) { sets.push(`${col} = @${col}`); args[col] = v; }
+  }
+  if (!sets.length) return json(res, 200, { case: caseApi(row), unchanged: true });
+  db.prepare(`UPDATE cases SET ${sets.join(', ')}, updated_at = @now WHERE id = @id`).run(args);
+  logActivity('case', null, `Изменён кейс: «${row.title.slice(0, 60)}»`, u.id);
+  json(res, 200, { case: caseApi(db.prepare('SELECT * FROM cases WHERE id = ?').get(row.id)) });
+});
+
+route('DELETE', '/api/cases/:id', async (req, res, p) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const row = db.prepare('SELECT title FROM cases WHERE id = ?').get(p.id);
+  db.prepare('DELETE FROM cases WHERE id = ?').run(p.id);
+  if (row) logActivity('case', null, `Удалён кейс: «${row.title.slice(0, 60)}»`, u.id);
+  json(res, 200, { ok: true });
+});
+
 // ---- health / admin ----
 route('GET', '/api/health', async (_req, res) => {
   const c = (q) => db.prepare(q).get().c;
@@ -619,6 +674,7 @@ route('GET', '/api/health', async (_req, res) => {
     shipments: c("SELECT COUNT(*) c FROM objects WHERE type='shipment' AND deleted_at IS NULL"),
     contracts: c("SELECT COUNT(*) c FROM objects WHERE type='contract' AND deleted_at IS NULL"),
     price: c('SELECT COUNT(*) c FROM price_items'),
+    cases: c('SELECT COUNT(*) c FROM cases'),
     trash: c('SELECT COUNT(*) c FROM objects WHERE deleted_at IS NOT NULL'),
     activity: c('SELECT COUNT(*) c FROM activity'),
     remindersDue: db.prepare("SELECT * FROM objects WHERE reminder IS NOT NULL AND deleted_at IS NULL").all()

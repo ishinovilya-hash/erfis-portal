@@ -442,6 +442,7 @@ const ROUTES = {
   payments:{title:'QR для оплаты пошлин', crumb:'Инструменты'},
   messages:{title:'Формирование сообщений', crumb:'Инструменты'},
   price:{title:'Прайс ЭРФИС', crumb:'Инструменты'},
+  cases:{title:'Библиотека кейсов', crumb:'Инструменты'},
   trash:{title:'Корзина', crumb:'Служебное'},
   log:{title:'Журнал изменений', crumb:'Служебное'},
 };
@@ -473,6 +474,7 @@ async function loadRoute(){
     state.requisites = reqs.requisites; state.payments = list.payments;
   }
   else if(r==='price') state.price = (await api('/price')).items;
+  else if(r==='cases') state.cases = (await api('/cases')).cases;
 }
 async function loadCounts(){
   try{ state.health = await api('/health'); }catch(e){}
@@ -499,6 +501,7 @@ function renderNav(){
     {r:'payments', label:'QR оплаты пошлин', ic:'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h3v3h-3zM19 14h1M19 19h1M17 19h0'},
     {r:'messages', label:'Формирование сообщений', ic:'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'},
     {r:'price', label:'Прайс ЭРФИС', count:h.price||null, ic:'M7 7h.01M3 5a2 2 0 0 1 2-2h6l10 10-8 8L3 11z'},
+    {r:'cases', label:'Библиотека кейсов', count:h.cases||null, ic:'M4 7h16v12H4zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'},
     {sec:'Служебное'},
     {r:'trash', label:'Корзина', count:h.trash||null, ic:'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13'},
     {r:'log', label:'Журнал изменений', ic:'M8 6h11M8 12h11M8 18h11M3.5 6h.01M3.5 12h.01M3.5 18h.01'},
@@ -1291,6 +1294,90 @@ function renderPrice(){
   };
 }
 
+/* ---------- Библиотека кейсов ---------- */
+const CASE_CATEGORIES = [['court','Судебный спор'],['tm','Регистрация ТЗ'],['patent','Патентование']];
+const caseCatLabel = k => (CASE_CATEGORIES.find(c=>c[0]===k)||[null,k])[1];
+
+function renderCases(){
+  const items = state.cases;
+  if(!items){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
+  const cf = state.caseForm;
+
+  const formHtml = cf ? `
+    <div class="listcard" style="padding:18px;margin-bottom:16px">
+      <div class="grid2">
+        <div class="field" style="padding:8px 0"><label>Категория</label>
+          <select id="case-category">${CASE_CATEGORIES.map(([k,l])=>`<option value="${k}" ${cf.category===k?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
+        <div class="field" style="padding:8px 0"><label>№ дела / заявки</label>
+          <input id="case-number" value="${esc(cf.caseNumber)}"/></div>
+      </div>
+      <div class="field" style="padding:8px 0"><label>Название кейса</label>
+        <input id="case-title" value="${esc(cf.title)}" placeholder="Коротко — для списка и будущих публикаций"/></div>
+      <div class="field" style="padding:8px 0"><label>Ответственный (кто пишет кейс)</label>
+        <select id="case-responsible"><option value="">— не указан</option>${state.users.map(u=>`<option value="${u.id}" ${cf.responsible===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
+      <div class="field" style="padding:8px 0"><label>Что было</label>
+        <textarea id="case-summary" rows="4" placeholder="Суть дела/задачи">${esc(cf.summary)}</textarea></div>
+      <div class="field" style="padding:8px 0"><label>Как мы выиграли</label>
+        <textarea id="case-result" rows="4" placeholder="Результат и что сработало">${esc(cf.result)}</textarea></div>
+      <div style="display:flex;gap:9px;margin-top:6px;align-items:center">
+        <button class="btn primary" id="case-save">${cf.id?'Сохранить':'Добавить кейс'}</button>
+        <button class="btn" id="case-cancel">Отмена</button>
+        ${cf.id?`<span class="spacer"></span><button class="btn danger" id="case-del">Удалить</button>`:''}
+      </div>
+    </div>` : '';
+
+  $('#view').innerHTML = `
+    <div class="demoline">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16v12H4zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      Короткая база выигранных дел — готовый материал для сайта, КП и соцсетей. Не теряйте ни один выигранный кейс.
+    </div>
+    <div class="hotbtns" style="margin-bottom:16px">
+      <div class="fl" style="width:100%">Добавить кейс</div>
+      ${CASE_CATEGORIES.map(([k,l])=>`<button class="chip" data-newcase="${k}">${esc(l)}</button>`).join('')}
+    </div>
+    ${formHtml}
+    ${items.length ? `<div class="listcard">${items.map(it=>`
+      <div class="lrow" data-copen="${it.id}" style="cursor:pointer">
+        <div class="lr-main">
+          <div class="lr-t">${esc(it.title)}${it.caseNumber?` · <span class="mono">№${esc(it.caseNumber)}</span>`:''}</div>
+          <div class="lr-s">${esc(caseCatLabel(it.category))}${it.responsible?` · ${esc(userName(it.responsible)||'')}`:''}${it.result?` · ${esc(it.result.slice(0,80))}${it.result.length>80?'…':''}`:''}</div>
+        </div>
+        <div class="when">${fmtDT(it.createdAt)}</div>
+      </div>`).join('')}</div>` : `<div class="hint" style="margin-top:6px">Пока нет ни одного кейса. Нажмите одну из кнопок выше, чтобы добавить первый.</div>`}`;
+
+  document.querySelectorAll('#view [data-newcase]').forEach(b=> b.onclick = ()=>{
+    state.caseForm = {id:null, category:b.dataset.newcase, title:'', caseNumber:'', summary:'', result:'', responsible:state.me.id};
+    renderCases(); window.scrollTo({top:0,behavior:'smooth'});
+  });
+  document.querySelectorAll('#view [data-copen]').forEach(el=> el.onclick = ()=>{
+    const it = items.find(x=>x.id===el.dataset.copen); if(!it) return;
+    state.caseForm = {...it};
+    renderCases(); window.scrollTo({top:0,behavior:'smooth'});
+  });
+  const cc = $('#view #case-cancel'); if(cc) cc.onclick = ()=>{ state.caseForm=null; renderCases(); };
+  const cs = $('#view #case-save'); if(cs) cs.onclick = async ()=>{
+    const body = {
+      category: $('#view #case-category').value,
+      caseNumber: $('#view #case-number').value.trim(),
+      title: $('#view #case-title').value.trim(),
+      responsible: $('#view #case-responsible').value || null,
+      summary: $('#view #case-summary').value.trim(),
+      result: $('#view #case-result').value.trim(),
+    };
+    if(!body.title){ toast('Укажите название кейса', true); return; }
+    try{
+      if(cf.id) await api('/cases/'+cf.id,{method:'PATCH', body:jbody(body)});
+      else await api('/cases',{method:'POST', body:jbody(body)});
+      toast('Сохранено'); state.caseForm = null; await loadRoute(); renderCases();
+    }catch(e){ toast(e.message,true); }
+  };
+  const cd = $('#view #case-del'); if(cd) cd.onclick = async ()=>{
+    if(!confirm('Удалить этот кейс из библиотеки?')) return;
+    try{ await api('/cases/'+cf.id,{method:'DELETE'}); state.caseForm=null; await loadRoute(); renderCases(); }
+    catch(e){ toast(e.message,true); }
+  };
+}
+
 function renderTrash(){
   const t = state.trash;
   if(!t){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
@@ -1362,6 +1449,7 @@ function renderAll(){
   else if(state.route==='payments') renderPayments();
   else if(state.route==='messages') renderMessages();
   else if(state.route==='price') renderPrice();
+  else if(state.route==='cases') renderCases();
   else if(state.route==='trash') renderTrash();
   else if(state.route==='log') renderLog();
 }

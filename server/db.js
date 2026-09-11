@@ -98,6 +98,19 @@ CREATE TABLE IF NOT EXISTS payments (
   created_by TEXT,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS cases (
+  id TEXT PRIMARY KEY,
+  category TEXT NOT NULL DEFAULT 'court',
+  title TEXT NOT NULL DEFAULT '',
+  case_number TEXT NOT NULL DEFAULT '',
+  summary TEXT NOT NULL DEFAULT '',
+  result TEXT NOT NULL DEFAULT '',
+  responsible TEXT,
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cases_category ON cases(category);
 `);
 
 // --- миграции для существующих баз ---
