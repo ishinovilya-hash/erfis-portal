@@ -440,6 +440,7 @@ const ROUTES = {
   contracts:{title:'Учёт договоров контрагентов', crumb:'Реестр объектов', type:'contract'},
   reminders:{title:'Напоминания о продлении', crumb:'Контроль сроков'},
   payments:{title:'QR для оплаты пошлин', crumb:'Инструменты'},
+  messages:{title:'Формирование сообщений', crumb:'Инструменты'},
   price:{title:'Прайс ЭРФИС', crumb:'Инструменты'},
   trash:{title:'Корзина', crumb:'Служебное'},
   log:{title:'Журнал изменений', crumb:'Служебное'},
@@ -496,6 +497,7 @@ function renderNav(){
     {r:'reminders', label:'Напоминания', count:dueTotal||null, flag:!!dueTotal, ic:'M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'},
     {sec:'Инструменты'},
     {r:'payments', label:'QR оплаты пошлин', ic:'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h3v3h-3zM19 14h1M19 19h1M17 19h0'},
+    {r:'messages', label:'Формирование сообщений', ic:'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'},
     {r:'price', label:'Прайс ЭРФИС', count:h.price||null, ic:'M7 7h.01M3 5a2 2 0 0 1 2-2h6l10 10-8 8L3 11z'},
     {sec:'Служебное'},
     {r:'trash', label:'Корзина', count:h.trash||null, ic:'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13'},
@@ -1127,6 +1129,92 @@ function updateQrPane(){
   };
 }
 
+/* ---------- Формирование сообщений ---------- */
+const fmtInt = v => { const n = Number(String(v).replace(',', '.')) || 0; return n.toLocaleString('ru-RU'); };
+const MESSAGE_PRESETS = [
+  {
+    id: 'tz-podacha',
+    label: 'Пошлина при подаче товарного знака',
+    fields: [
+      ['appNo', '№ заявки'],
+      ['name', 'Наименование обозначения'],
+      ['amount', 'Сумма пошлины, ₽', 'number'],
+    ],
+    build: v => `Добрый день!  Оплатите, пожалуйста пошлины.
+Информация для оплаты:
+Сумма: ${fmtInt(v.amount)} руб.
+Назначение: п. 2.1, 2.4 Приложения № 1 к Положению о патентных и иных пошлинах за регистрацию заявки на тз №${v.appNo||''} "${v.name||''}" и проведение экспертизы. Реквизиты прилагаются.`,
+  },
+  {
+    id: 'tz-vydacha',
+    label: 'Пошлина при выдаче товарного знака',
+    fields: [
+      ['appNo', '№ заявки'],
+      ['name', 'Наименование обозначения'],
+      ['amount', 'Сумма пошлины, ₽', 'number'],
+      ['payer', 'Плательщик'],
+    ],
+    build: v => `Добрый день! По заявке на товарный знак ${v.name||''} получено решение о регистрации (в приложении). Необходимо оплатить пошлину.
+
+Плательщик:  ${v.payer||''}
+
+Для получения электронного свидетельства, необходимо оплатить пошлину в Роспатент:
+Сумма: ${fmtInt(v.amount)} руб.
+Назначение: п. 2.11. Прил. № 1 к Полож. о патентных и иных пошлинах за регистрацию тз по заявке №${v.appNo||''}, выдачу свид.в форме эл. документа
+
+В случае, если вы хотите получить свидетельство в бумажном виде, необходимо оплатить пошлину, а также мы выставим счет на 5 тыс. руб. за получение свидетельства на бумаге.
+
+Для получения бумажного свидетельства:
+Сумма: ${fmtInt((Number(v.amount)||0)+3000)} руб.
+Назначение: п. 2.11., 2.14 Прил. № 1 к Полож. о патентных и иных пошлинах за регистрацию тз по заявке №${v.appNo||''}, выдачу свид. на бум. носителе
+
+Реквизиты Роспатента прилагаю. Пожалуйста, пришите платежное поручение после оплаты пошлины.`,
+  },
+];
+function renderMessages(){
+  if(!state.msgForm) state.msgForm = {presetId: MESSAGE_PRESETS[0].id, values: {}};
+  const mf = state.msgForm;
+  const preset = MESSAGE_PRESETS.find(p=>p.id===mf.presetId) || MESSAGE_PRESETS[0];
+  if(!mf.values[preset.id]) mf.values[preset.id] = {};
+  const v = mf.values[preset.id];
+  const text = preset.build(v);
+
+  $('#view').innerHTML = `
+    <div class="demoline">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      Выберите шаблон, заполните поля — готовый текст скопируйте и отправьте клиенту.
+    </div>
+    <div class="seg" style="margin-bottom:16px;flex-wrap:wrap">
+      ${MESSAGE_PRESETS.map(p=>`<button aria-pressed="${p.id===preset.id}" data-msgpreset="${p.id}">${esc(p.label)}</button>`).join('')}
+    </div>
+    <div class="paygrid">
+      <div>
+        <div class="listcard" style="padding:18px">
+          ${preset.fields.map(([key,label,type])=>`
+            <div class="field" style="padding:8px 0"><label>${esc(label)}</label>
+              <input data-msgfield="${key}" type="${type||'text'}" value="${esc(v[key]||'')}"/></div>`).join('')}
+        </div>
+      </div>
+      <div class="qrpane">
+        <textarea id="msg-text" readonly rows="16" style="width:100%;resize:vertical;font-family:var(--mono,monospace);font-size:13px;line-height:1.5;padding:14px;border-radius:10px;border:1px solid var(--hairline-2);background:var(--panel-2,transparent);color:inherit">${esc(text)}</textarea>
+        <button class="btn primary" id="msg-copy" style="margin-top:12px;width:100%">Скопировать текст</button>
+      </div>
+    </div>`;
+
+  document.querySelectorAll('#view [data-msgpreset]').forEach(b=> b.onclick = ()=>{
+    mf.presetId = b.dataset.msgpreset; renderMessages();
+  });
+  document.querySelectorAll('#view [data-msgfield]').forEach(el=> el.oninput = ()=>{
+    v[el.dataset.msgfield] = el.value;
+    const ta = $('#view #msg-text'); if(ta) ta.value = preset.build(v);
+  });
+  $('#view #msg-copy').onclick = async ()=>{
+    const ta = $('#view #msg-text');
+    try{ await navigator.clipboard.writeText(ta.value); toast('Текст скопирован'); }
+    catch(e){ toast('Не удалось скопировать', true); }
+  };
+}
+
 /* ---------- Прайс ЭРФИС ---------- */
 function renderPrice(){
   const items = state.price;
@@ -1269,6 +1357,7 @@ function renderAll(){
   if(ROUTES[state.route] && ROUTES[state.route].type) renderRegistry();
   else if(state.route==='reminders') renderReminders();
   else if(state.route==='payments') renderPayments();
+  else if(state.route==='messages') renderMessages();
   else if(state.route==='price') renderPrice();
   else if(state.route==='trash') renderTrash();
   else if(state.route==='log') renderLog();
