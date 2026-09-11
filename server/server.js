@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 
 import { db, seedUsers, importSeedIfEmpty, EMPLOYEES, hashPassword, verifyPassword } from './db.js';
 import {
@@ -692,9 +693,35 @@ async function serveStatic(req, res, pathname) {
   res.end(body);
 }
 
+// ---------- gzip (тоннель до VM медленный по пропускной способности — сжатие сильно сокращает время загрузки списков) ----------
+function wrapCompression(req, res) {
+  if (!/\bgzip\b/.test(req.headers['accept-encoding'] || '')) return;
+  const origWriteHead = res.writeHead.bind(res);
+  const origEnd = res.end.bind(res);
+  let pendingHead = null;
+  res.writeHead = (status, headers) => { pendingHead = [status, headers || {}]; return res; };
+  res.end = (body) => {
+    if (!pendingHead) return origEnd(body);
+    const [status, headers] = pendingHead;
+    const ct = String(headers['Content-Type'] || '');
+    const compressible = /json|text|javascript|svg|html|css/i.test(ct);
+    if (compressible && body) {
+      const buf = Buffer.isBuffer(body) ? body : Buffer.from(body);
+      if (buf.length > 512) {
+        const gz = gzipSync(buf);
+        origWriteHead(status, { ...headers, 'Content-Encoding': 'gzip', 'Content-Length': gz.length, Vary: 'Accept-Encoding' });
+        return origEnd(gz);
+      }
+    }
+    origWriteHead(status, headers);
+    return origEnd(body);
+  };
+}
+
 // ---------- request handler ----------
 const server = http.createServer(async (req, res) => {
   try {
+    wrapCompression(req, res);
     const url = new URL(req.url, 'http://localhost');
     const pathname = url.pathname;
     if (pathname.startsWith('/api/')) {
