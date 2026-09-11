@@ -63,7 +63,16 @@ systemctl disable --now erfis-cloudflared 2>/dev/null || true
 rm -f /etc/systemd/system/erfis-cloudflared.service
 
 install -m 644 "$APP_DIR/deploy/erfis-portal.service" /etc/systemd/system/erfis-portal.service
-cat > /etc/systemd/system/erfis-tunnel.service <<EOF
+
+# Если уже настроен постоянный туннель (portal.erfis.ru, платный localhost.run
+# с ключом $DATA_DIR/.ssh/lhr_tunnel) — не трогаем erfis-tunnel.service,
+# чтобы повторный запуск этого скрипта (например, для обновления кода) его не затёр.
+RESERVED_TUNNEL=0
+if [ -f "$DATA_DIR/.ssh/lhr_tunnel" ]; then
+  RESERVED_TUNNEL=1
+  say "Постоянный туннель уже настроен (portal.erfis.ru) — конфигурация не меняется"
+else
+  cat > /etc/systemd/system/erfis-tunnel.service <<EOF
 [Unit]
 Description=ЭРФИС Портал — туннель (localhost.run)
 After=network-online.target erfis-portal.service
@@ -84,6 +93,7 @@ NoNewPrivileges=true
 [Install]
 WantedBy=multi-user.target
 EOF
+fi
 
 systemctl daemon-reload
 systemctl enable --now erfis-portal.service
@@ -91,17 +101,32 @@ systemctl restart erfis-portal.service
 systemctl enable --now erfis-tunnel.service
 systemctl restart erfis-tunnel.service
 
-say "Ожидание туннеля"
-URL=""
-for i in $(seq 1 45); do
-  sleep 2
-  URL="$(journalctl -u erfis-tunnel -n 80 --no-pager 2>/dev/null | grep -oE 'https://[a-z0-9]+\.lhr\.life' | tail -1 || true)"
-  [ -n "$URL" ] && break
-done
-[ -n "$URL" ] && { echo "$URL" > "$DATA_DIR/tunnel-url"; chown "$SVC_USER:$SVC_USER" "$DATA_DIR/tunnel-url"; }
-
 DK="$(grep '^DEPLOY_KEY=' "$DATA_DIR/env" | cut -d= -f2)"
-cat <<EOF
+
+if [ "$RESERVED_TUNNEL" = "1" ]; then
+  sleep 4
+  cat <<EOF
+
+============================================================
+  ЭРФИС Портал обновлён.
+
+  Публичный адрес:   https://portal.erfis.ru
+  DEPLOY_KEY:         $DK
+
+  Статус:   systemctl status erfis-portal erfis-tunnel
+============================================================
+EOF
+else
+  say "Ожидание туннеля"
+  URL=""
+  for i in $(seq 1 45); do
+    sleep 2
+    URL="$(journalctl -u erfis-tunnel -n 80 --no-pager 2>/dev/null | grep -oE 'https://[a-z0-9]+\.lhr\.life' | tail -1 || true)"
+    [ -n "$URL" ] && break
+  done
+  [ -n "$URL" ] && { echo "$URL" > "$DATA_DIR/tunnel-url"; chown "$SVC_USER:$SVC_USER" "$DATA_DIR/tunnel-url"; }
+
+  cat <<EOF
 
 ============================================================
   ЭРФИС Портал установлен.
@@ -113,3 +138,4 @@ cat <<EOF
   Статус:   systemctl status erfis-portal erfis-tunnel
 ============================================================
 EOF
+fi
