@@ -688,14 +688,14 @@ function openCreate(type){
   renderPanel();
 }
 function blankDraft(type){
-  const b = {name:'', responsible:state.me.id, notes:'', holder:'', appNumber:'', regNumber:'', priorityDate:'', expiryDate:'', documentRef:'', objectType:'', mktuClasses:'', intNo:'', contactPerson:'', email:'', registry:'', actWhen:'', contractKind:'', workDate:'', stage:'', act:'', executor:''};
+  const b = {name:'', responsible:state.me.id, notes:'', holder:'', appNumber:'', regNumber:'', priorityDate:'', expiryDate:'', documentRef:'', documentUrl:'', objectType:'', mktuClasses:'', intNo:'', contactPerson:'', email:'', registry:'', actWhen:'', contractKind:'', workDate:'', stage:'', act:'', executor:''};
   if(type==='patent') b.objectType = 'ИЗ';
   if(type==='software') b.registry = 'Роспатент';
   if(type==='shipment') b.priorityDate = new Date().toISOString().slice(0,10);
   if(type==='contract') b.contractKind = state.contractKind || 'legal';
   return b;
 }
-const DRAFT_KEYS = ['holder','name','appNumber','regNumber','objectType','mktuClasses','priorityDate','expiryDate','documentRef','notes','intNo','contactPerson','email','registry','actWhen','contractKind','workDate','stage','act','executor'];
+const DRAFT_KEYS = ['holder','name','appNumber','regNumber','objectType','mktuClasses','priorityDate','expiryDate','documentRef','documentUrl','notes','intNo','contactPerson','email','registry','actWhen','contractKind','workDate','stage','act','executor'];
 function closePanel(){
   state.panel = null;
   $('#scrim').classList.remove('open');
@@ -775,7 +775,10 @@ function renderPanel(){
     ? `<div class="field"><label>Ответственный сотрудник</label><select data-k="responsible"><option value="">— не назначен</option>${state.users.map(u=>`<option value="${u.id}" ${src.responsible===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select><div class="hint">Письмо о продлении придёт на: ${esc(state.byId[src.responsible]?.email || '—')}</div></div>`
     : (()=>{ const u=state.byId[src.responsible]; return `<div class="field"><label>Ответственный сотрудник</label><div class="val">${u?`${esc(u.name)} · <span class="mono">${esc(u.email)}</span>`:'не назначен'}</div></div>`; })();
 
-  const docField = `<div class="field disabledwrap"><label>Документ (свидетельство / патент)</label><div class="val">${esc(src.documentRef)||'—'}</div><div class="hint">Загрузка PDF и ссылки на облако появятся позже — поле уже предусмотрено.</div></div>`;
+  const docUrlField = editing
+    ? `<div class="field"><label>Ссылка на PDF (Диск-О)</label><input data-k="documentUrl" type="url" value="${esc(src.documentUrl)}" placeholder="https://cloud.mail.ru/public/..."/><div class="hint">Откройте файл на Диске-О → «Поделиться» → скопируйте ссылку сюда.</div></div>`
+    : `<div class="field"><label>Ссылка на PDF</label><div class="val">${src.documentUrl ? `<a href="${esc(src.documentUrl)}" target="_blank" rel="noopener noreferrer">${esc(src.documentUrl)}</a>` : '—'}</div></div>`;
+  const docField = f('Документ (свидетельство / патент) — название или №','documentRef') + docUrlField;
 
   let soprovodHtml = '';
   if(ps.mode==='view' && type==='patent' && ps.obj && ['ПМ','ИЗ','ПО'].includes(ps.obj.objectType)){
