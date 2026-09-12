@@ -661,6 +661,63 @@ route('DELETE', '/api/cases/:id', async (req, res, p) => {
   json(res, 200, { ok: true });
 });
 
+// ---- 360° карточка клиента ----
+const clientKey = (name) => String(name || '').trim().toLowerCase();
+
+route('GET', '/api/clients', async (req, res) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const rows = db.prepare("SELECT holder, type FROM objects WHERE deleted_at IS NULL AND trim(holder) != ''").all();
+  const byKey = new Map();
+  for (const r of rows) {
+    const key = clientKey(r.holder);
+    if (!byKey.has(key)) byKey.set(key, { key, name: r.holder, counts: {}, total: 0 });
+    const c = byKey.get(key);
+    c.counts[r.type] = (c.counts[r.type] || 0) + 1;
+    c.total += 1;
+  }
+  const sites = db.prepare('SELECT key, website FROM clients').all();
+  for (const s of sites) {
+    if (!byKey.has(s.key)) byKey.set(s.key, { key: s.key, name: s.key, counts: {}, total: 0 });
+    byKey.get(s.key).website = s.website || '';
+  }
+  const clients = [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  json(res, 200, { clients });
+});
+
+route('GET', '/api/clients/:key', async (req, res, p) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const key = p.key;
+  // SQLite's lower()/upper() only handle ASCII — фильтруем в JS, чтобы кириллица
+  // сравнивалась регистронезависимо корректно.
+  const rows = db.prepare("SELECT * FROM objects WHERE deleted_at IS NULL AND trim(holder) != '' ORDER BY type, name")
+    .all().filter((r) => clientKey(r.holder) === key);
+  if (!rows.length) {
+    const c = db.prepare('SELECT * FROM clients WHERE key = ?').get(key);
+    if (!c) return json(res, 404, { error: 'not found' });
+  }
+  const objects = { trademark: [], patent: [], software: [], shipment: [], contract: [] };
+  let name = key;
+  for (const r of rows) { objects[r.type].push(rowToApi(r)); name = r.holder; }
+  const client = db.prepare('SELECT * FROM clients WHERE key = ?').get(key);
+  json(res, 200, { key, name: client?.name || name, website: client?.website || '', objects });
+});
+
+route('PATCH', '/api/clients/:key', async (req, res, p) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const key = p.key;
+  const b = await readBody(req);
+  const match = db.prepare("SELECT holder FROM objects WHERE deleted_at IS NULL AND trim(holder) != ''")
+    .all().find((r) => clientKey(r.holder) === key);
+  const name = String(b.name || match?.holder || key).trim();
+  const website = String(b.website ?? '').trim();
+  const now = new Date().toISOString();
+  db.prepare(`INSERT INTO clients (key,name,website,updated_at,updated_by) VALUES (?,?,?,?,?)
+    ON CONFLICT(key) DO UPDATE SET name=excluded.name, website=excluded.website, updated_at=excluded.updated_at, updated_by=excluded.updated_by`)
+    .run(key, name, website, now, u.id);
+  logActivity('client', null, `Обновлён сайт клиента «${name}»`, u.id);
+  json(res, 200, { key, name, website });
+});
+
 // ---- health / admin ----
 route('GET', '/api/health', async (_req, res) => {
   const c = (q) => db.prepare(q).get().c;

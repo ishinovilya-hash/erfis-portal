@@ -111,6 +111,13 @@ CREATE TABLE IF NOT EXISTS cases (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_cases_category ON cases(category);
+CREATE TABLE IF NOT EXISTS clients (
+  key TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  website TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL,
+  updated_by TEXT
+);
 `);
 
 // --- миграции для существующих баз ---

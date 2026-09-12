@@ -443,6 +443,7 @@ const ROUTES = {
   messages:{title:'Формирование сообщений', crumb:'Инструменты'},
   price:{title:'Прайс ЭРФИС', crumb:'Инструменты'},
   cases:{title:'Библиотека кейсов', crumb:'Инструменты'},
+  clients:{title:'Клиенты 360°', crumb:'Инструменты'},
   trash:{title:'Корзина', crumb:'Служебное'},
   log:{title:'Журнал изменений', crumb:'Служебное'},
 };
@@ -475,6 +476,7 @@ async function loadRoute(){
   }
   else if(r==='price') state.price = (await api('/price')).items;
   else if(r==='cases') state.cases = (await api('/cases')).cases;
+  else if(r==='clients') state.clientsList = (await api('/clients')).clients;
 }
 async function loadCounts(){
   try{ state.health = await api('/health'); }catch(e){}
@@ -502,6 +504,7 @@ function renderNav(){
     {r:'messages', label:'Формирование сообщений', ic:'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'},
     {r:'price', label:'Прайс ЭРФИС', count:h.price||null, ic:'M7 7h.01M3 5a2 2 0 0 1 2-2h6l10 10-8 8L3 11z'},
     {r:'cases', label:'Библиотека кейсов', count:h.cases||null, ic:'M4 7h16v12H4zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'},
+    {r:'clients', label:'Клиенты 360°', ic:'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21a8 8 0 0 1 16 0'},
     {sec:'Служебное'},
     {r:'trash', label:'Корзина', count:h.trash||null, ic:'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13'},
     {r:'log', label:'Журнал изменений', ic:'M8 6h11M8 12h11M8 18h11M3.5 6h.01M3.5 12h.01M3.5 18h.01'},
@@ -1378,6 +1381,95 @@ function renderCases(){
   };
 }
 
+/* ---------- Клиенты 360° ---------- */
+const CLIENT_TYPE_LABELS = {trademark:'Товарные знаки', patent:'Патенты', software:'Программы для ЭВМ', shipment:'Отправления', contract:'Договоры'};
+const CLIENT_TYPE_ORDER = ['trademark','patent','software','shipment','contract'];
+
+async function loadClientDetail(key){
+  state.clientView = key;
+  state.clientDetail = null;
+  renderClients();
+  try{ state.clientDetail = await api('/clients/'+encodeURIComponent(key)); renderClients(); }
+  catch(e){ toast(e.message,true); state.clientView=null; renderClients(); }
+}
+
+function clientObjRow(o, type){
+  const bits = [];
+  if(o.regNumber) bits.push('№'+o.regNumber);
+  if(type==='contract' && o.priorityDate) bits.push('от '+fmt(o.priorityDate));
+  if(o.expiryDate) bits.push('до '+fmt(o.expiryDate));
+  const st = o.status;
+  return `<div class="lrow" data-clientobj="${o.id}" style="cursor:pointer">
+    <div class="lr-main"><div class="lr-t">${esc(o.name||'—')}</div><div class="lr-s mono">${esc(bits.join(' · ')||'—')}</div></div>
+    ${st && st.key!=='none' ? `<span style="font-size:12px;color:var(--${st.key==='active'?'ok':st.key==='expired'?'crit':'warn'})">${esc(st.label)}</span>`:''}
+  </div>`;
+}
+
+function renderClients(){
+  if(state.clientView){
+    const d = state.clientDetail;
+    if(!d){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
+    const sections = CLIENT_TYPE_ORDER.filter(t=> d.objects[t] && d.objects[t].length);
+    $('#view').innerHTML = `
+      <button class="btn" id="client-back" style="margin-bottom:14px">← Все клиенты</button>
+      <h2 style="margin:0 0 4px">${esc(d.name)}</h2>
+      <div class="hint" style="margin-bottom:16px">Всего объектов: ${sections.reduce((s,t)=>s+d.objects[t].length,0)}</div>
+      <div class="listcard" style="padding:18px;margin-bottom:16px">
+        <div class="field" style="padding:0"><label>Сайт клиента</label>
+          <div style="display:flex;gap:8px">
+            <input id="client-site" type="url" value="${esc(d.website)}" placeholder="https://..." style="flex:1"/>
+            <button class="btn primary" id="client-site-save">Сохранить</button>
+          </div>
+          <div class="hint" style="margin-top:6px">Для анализа на допродажи — пришлите ссылку и название клиента в чат.</div>
+        </div>
+      </div>
+      ${sections.length ? sections.map(t=>`
+        <h3 class="price-cat">${CLIENT_TYPE_LABELS[t]} (${d.objects[t].length})</h3>
+        <div class="listcard" style="margin-bottom:16px">${d.objects[t].map(o=>clientObjRow(o,t)).join('')}</div>
+      `).join('') : `<div class="hint">Объектов не найдено.</div>`}`;
+
+    $('#view #client-back').onclick = ()=>{ state.clientView=null; state.clientDetail=null; renderClients(); };
+    $('#view #client-site-save').onclick = async ()=>{
+      const website = $('#view #client-site').value.trim();
+      try{
+        await api('/clients/'+encodeURIComponent(d.key),{method:'PATCH', body:jbody({name:d.name, website})});
+        toast('Сохранено');
+        const cached = state.clientsList && state.clientsList.find(c=>c.key===d.key);
+        if(cached) cached.website = website; // чтобы список тоже был актуален при возврате назад
+        await loadClientDetail(d.key);
+      }catch(e){ toast(e.message,true); }
+    };
+    document.querySelectorAll('#view [data-clientobj]').forEach(el=> el.onclick = ()=> openDetail(el.dataset.clientobj));
+    return;
+  }
+
+  const list = state.clientsList;
+  if(!list){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
+  if(state.clientsQ==null) state.clientsQ = '';
+  const q = state.clientsQ.trim().toLowerCase();
+  const filtered = q ? list.filter(c=> c.name.toLowerCase().includes(q)) : list;
+
+  $('#view').innerHTML = `
+    <div class="demoline">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21a8 8 0 0 1 16 0"/></svg>
+      <span style="flex:1;min-width:0">Все объекты клиента в одном месте — товарные знаки, патенты, договоры. Хорошая точка, чтобы увидеть пробелы в защите и предложить допродажу.</span>
+    </div>
+    <input id="clients-search" value="${esc(state.clientsQ)}" placeholder="Поиск клиента по названию…" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--hairline);background:var(--surface);margin-bottom:14px"/>
+    ${filtered.length ? `<div class="listcard">${filtered.map(c=>`
+      <div class="lrow" data-client="${esc(c.key)}" style="cursor:pointer">
+        <div class="lr-main"><div class="lr-t">${esc(c.name)}</div>
+          <div class="lr-s">${CLIENT_TYPE_ORDER.filter(t=>c.counts[t]).map(t=>`${CLIENT_TYPE_LABELS[t]}: ${c.counts[t]}`).join(' · ')||'—'}${c.website?` · <a href="${esc(c.website)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${esc(c.website)}</a>`:''}</div></div>
+        <div class="when">${c.total} объект(ов)</div>
+      </div>`).join('')}</div>` : `<div class="hint">Ничего не найдено.</div>`}`;
+
+  $('#view #clients-search').oninput = e=>{
+    const pos = e.target.selectionStart;
+    state.clientsQ = e.target.value; renderClients();
+    const el = $('#view #clients-search'); if(el){ el.focus(); el.setSelectionRange(pos,pos); }
+  };
+  document.querySelectorAll('#view [data-client]').forEach(el=> el.onclick = ()=> loadClientDetail(el.dataset.client));
+}
+
 function renderTrash(){
   const t = state.trash;
   if(!t){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
@@ -1450,6 +1542,7 @@ function renderAll(){
   else if(state.route==='messages') renderMessages();
   else if(state.route==='price') renderPrice();
   else if(state.route==='cases') renderCases();
+  else if(state.route==='clients') renderClients();
   else if(state.route==='trash') renderTrash();
   else if(state.route==='log') renderLog();
 }
@@ -1557,6 +1650,7 @@ document.addEventListener('keydown', e=>{
 setInterval(()=>{
   if($('#app').hidden) return;
   if(state.panel && state.panel.mode!=='view') return;
+  if(state.route==='clients' && state.clientView) return; // не сбрасывать несохранённый URL сайта
   refresh().catch(()=>{});
 }, 30000);
 
