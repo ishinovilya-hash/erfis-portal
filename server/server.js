@@ -10,10 +10,11 @@ import { gzipSync } from 'node:zlib';
 
 import { db, seedUsers, importSeedIfEmpty, EMPLOYEES, hashPassword, verifyPassword } from './db.js';
 import {
-  json, text, readBody, parseCookies, setCookie, todayISO,
+  json, text, readBody, readRawBody, parseCookies, setCookie, todayISO,
   rowToApi, EDITABLE, EXTRA_KEYS, FIELD_LABELS, initialsOf,
 } from './lib.js';
 import { buildSoprovod, soprovodFilename, soprovodAvailable } from './soprovod.js';
+import { preprocessTemplate, fillTemplate, listPlaceholders } from './kp.js';
 
 const OBJECT_TYPES = ['trademark', 'patent', 'software', 'shipment', 'contract'];
 
@@ -661,6 +662,69 @@ route('DELETE', '/api/cases/:id', async (req, res, p) => {
   json(res, 200, { ok: true });
 });
 
+// ---- формирование КП ----
+const kpBufFromRow = (r) => Buffer.from(r.content.buffer, r.content.byteOffset, r.content.byteLength);
+const kpApi = (r) => ({ id: r.id, name: r.name, uploadedBy: r.uploaded_by, uploadedAt: r.uploaded_at });
+
+route('GET', '/api/kp-templates', async (req, res) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const rows = db.prepare('SELECT id, name, uploaded_by, uploaded_at FROM kp_templates ORDER BY uploaded_at DESC').all();
+  json(res, 200, { templates: rows.map(kpApi) });
+});
+
+route('POST', '/api/kp-templates', async (req, res, p, url) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const name = (url.searchParams.get('name') || 'Без названия').trim().slice(0, 200);
+  let raw;
+  try { raw = await readRawBody(req); } catch (e) { return json(res, 400, { error: e.message }); }
+  if (!raw.length) return json(res, 400, { error: 'Пустой файл' });
+  let processed;
+  try { processed = preprocessTemplate(raw); } catch (e) { return json(res, 400, { error: 'Не похоже на .docx: ' + e.message }); }
+  const id = 'kp-n' + randomBytes(4).toString('hex');
+  db.prepare('INSERT INTO kp_templates (id,name,content,uploaded_by,uploaded_at) VALUES (?,?,?,?,?)')
+    .run(id, name, processed, u.id, new Date().toISOString());
+  logActivity('kp', null, `Загружен шаблон КП: «${name}»`, u.id);
+  let placeholders = [];
+  try { placeholders = listPlaceholders(processed); } catch {}
+  json(res, 200, { template: { id, name }, placeholders });
+});
+
+route('DELETE', '/api/kp-templates/:id', async (req, res, p) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const row = db.prepare('SELECT name FROM kp_templates WHERE id = ?').get(p.id);
+  db.prepare('DELETE FROM kp_templates WHERE id = ?').run(p.id);
+  if (row) logActivity('kp', null, `Удалён шаблон КП: «${row.name}»`, u.id);
+  json(res, 200, { ok: true });
+});
+
+route('GET', '/api/kp-templates/:id/generate', async (req, res, p, url) => {
+  const u = currentUser(req); if (!u) return text(res, 401, 'auth');
+  const row = db.prepare('SELECT * FROM kp_templates WHERE id = ?').get(p.id);
+  if (!row) return text(res, 404, 'not found');
+  const customer = url.searchParams.get('customer') || '';
+  const work = url.searchParams.get('work') || '';
+  const duty = url.searchParams.get('duty') || '';
+  const workNum = parseFloat(String(work).replace(',', '.')) || 0;
+  const dutyNum = parseFloat(String(duty).replace(',', '.')) || 0;
+  const fmtSum = (n) => n.toLocaleString('ru-RU');
+  const buf = fillTemplate(kpBufFromRow(row), {
+    ЗАКАЗЧИК: customer,
+    СУММА_РАБОТ: work ? fmtSum(workNum) : '',
+    СУММА_ПОШЛИН: duty ? fmtSum(dutyNum) : '',
+    ИТОГО: (work || duty) ? fmtSum(workNum + dutyNum) : '',
+    ДАТА: fmtDate(todayISO()),
+  });
+  logActivity('kp', null, `Сформировано КП «${row.name}» для «${customer || 'без заказчика'}»`, u.id);
+  const filename = `КП ${row.name} ${customer || ''}`.trim().replace(/[\\/:*?"<>|]+/g, '_') + '.docx';
+  res.writeHead(200, {
+    'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'Content-Disposition': `attachment; filename="kp.docx"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    'Content-Length': buf.length,
+    'Cache-Control': 'no-store',
+  });
+  res.end(buf);
+});
+
 // ---- health / admin ----
 route('GET', '/api/health', async (_req, res) => {
   const c = (q) => db.prepare(q).get().c;
@@ -675,6 +739,7 @@ route('GET', '/api/health', async (_req, res) => {
     contracts: c("SELECT COUNT(*) c FROM objects WHERE type='contract' AND deleted_at IS NULL"),
     price: c('SELECT COUNT(*) c FROM price_items'),
     cases: c('SELECT COUNT(*) c FROM cases'),
+    kpTemplates: c('SELECT COUNT(*) c FROM kp_templates'),
     trash: c('SELECT COUNT(*) c FROM objects WHERE deleted_at IS NOT NULL'),
     activity: c('SELECT COUNT(*) c FROM activity'),
     remindersDue: db.prepare("SELECT * FROM objects WHERE reminder IS NOT NULL AND deleted_at IS NULL").all()
