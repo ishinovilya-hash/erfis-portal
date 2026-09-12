@@ -443,7 +443,6 @@ const ROUTES = {
   messages:{title:'Формирование сообщений', crumb:'Инструменты'},
   price:{title:'Прайс ЭРФИС', crumb:'Инструменты'},
   cases:{title:'Библиотека кейсов', crumb:'Инструменты'},
-  kp:{title:'Формирование КП', crumb:'Инструменты'},
   trash:{title:'Корзина', crumb:'Служебное'},
   log:{title:'Журнал изменений', crumb:'Служебное'},
 };
@@ -476,10 +475,6 @@ async function loadRoute(){
   }
   else if(r==='price') state.price = (await api('/price')).items;
   else if(r==='cases') state.cases = (await api('/cases')).cases;
-  else if(r==='kp'){
-    const [t,pr] = await Promise.all([api('/kp-templates'), api('/price')]);
-    state.kpTemplates = t.templates; state.price = pr.items;
-  }
 }
 async function loadCounts(){
   try{ state.health = await api('/health'); }catch(e){}
@@ -507,7 +502,6 @@ function renderNav(){
     {r:'messages', label:'Формирование сообщений', ic:'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'},
     {r:'price', label:'Прайс ЭРФИС', count:h.price||null, ic:'M7 7h.01M3 5a2 2 0 0 1 2-2h6l10 10-8 8L3 11z'},
     {r:'cases', label:'Библиотека кейсов', count:h.cases||null, ic:'M4 7h16v12H4zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'},
-    {r:'kp', label:'Формирование КП', count:h.kpTemplates||null, ic:'M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z'},
     {sec:'Служебное'},
     {r:'trash', label:'Корзина', count:h.trash||null, ic:'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13'},
     {r:'log', label:'Журнал изменений', ic:'M8 6h11M8 12h11M8 18h11M3.5 6h.01M3.5 12h.01M3.5 18h.01'},
@@ -1384,117 +1378,6 @@ function renderCases(){
   };
 }
 
-/* ---------- Формирование КП ---------- */
-function numFromText(s){
-  const m = String(s||'').match(/[\d\s]+(?:[.,]\d+)?/);
-  if(!m) return 0;
-  return parseFloat(m[0].replace(/\s/g,'').replace(',','.')) || 0;
-}
-function renderKp(){
-  const templates = state.kpTemplates, items = state.price;
-  if(!templates || !items){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
-  if(!state.kpForm) state.kpForm = {templateId: templates[0]?.id||'', customer:'', work:'', duty:'', picked:new Set(), templatesOpen: templates.length===0, pickerOpen:false};
-  const kf = state.kpForm;
-  if(!kf.templateId && templates.length) kf.templateId = templates[0].id;
-
-  const cats = [];
-  items.forEach(it=>{ const c = it.category || 'Прочее'; if(!cats.includes(c)) cats.push(c); });
-
-  const pickedFeeSum = [...kf.picked].reduce((s,id)=>{ const it=items.find(x=>String(x.id)===id); return s+(it?numFromText(it.fee):0); },0);
-  const pickedDutySum = [...kf.picked].reduce((s,id)=>{ const it=items.find(x=>String(x.id)===id); return s+(it?numFromText(it.duty):0); },0);
-
-  $('#view').innerHTML = `
-    <div class="demoline">
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z"/></svg>
-      <span style="flex:1;min-width:0">Загрузите шаблоны КП (.docx) с плейсхолдерами <span class="mono">{{ЗАКАЗЧИК}}</span>, <span class="mono">{{СУММА_РАБОТ}}</span>, <span class="mono">{{СУММА_ПОШЛИН}}</span>, <span class="mono">{{ИТОГО}}</span>, <span class="mono">{{ДАТА}}</span> — портал подставит значения и отдаст готовый файл.</span>
-    </div>
-
-    <details class="reqbox" id="kp-templates-box" ${kf.templatesOpen?'open':''}>
-      <summary>Шаблоны КП (${templates.length}) <span class="hint">— загрузка и удаление</span></summary>
-      <div style="padding:12px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <input type="file" id="kp-file" accept=".docx"/>
-        <input type="text" id="kp-name" placeholder="Название шаблона, напр. «КП на регистрацию ТЗ»" style="flex:1;min-width:220px"/>
-        <button class="btn primary" id="kp-upload">Загрузить</button>
-      </div>
-      ${templates.length ? `<div class="listcard">${templates.map(t=>`
-        <div class="lrow">
-          <div class="lr-main"><div class="lr-t">${esc(t.name)}</div><div class="lr-s">${esc(userName(t.uploadedBy)||'')}</div></div>
-          <div class="when">${fmtDT(t.uploadedAt)}</div>
-          <button class="btn danger" data-kpdel="${t.id}" style="padding:5px 9px">✕</button>
-        </div>`).join('')}</div>` : `<div class="hint">Шаблонов пока нет — загрузите первый выше.</div>`}
-    </details>
-
-    ${templates.length ? `
-    <div class="listcard" style="padding:18px;margin-top:16px">
-      <div class="field" style="padding:8px 0"><label>Шаблон</label>
-        <select id="kp-template">${templates.map(t=>`<option value="${t.id}" ${kf.templateId===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
-      <div class="field" style="padding:8px 0"><label>Заказчик</label>
-        <input id="kp-customer" value="${esc(kf.customer)}" placeholder="ООО «Ромашка»"/></div>
-
-      <details class="reqbox" id="kp-picker-box" ${kf.pickerOpen?'open':''}>
-        <summary>Выбрать услуги из прайса <span class="hint">— суммы можно будет подставить автоматически</span></summary>
-        ${cats.map(c=>`
-          <div class="fl" style="margin-top:10px">${esc(c)}</div>
-          ${items.filter(i=>(i.category||'Прочее')===c).map(it=>`
-            <label style="display:flex;gap:8px;align-items:center;padding:5px 0;font-size:13px">
-              <input type="checkbox" data-kppick="${it.id}" ${kf.picked.has(String(it.id))?'checked':''}/>
-              <span style="flex:1">${esc(it.name)}</span>
-              <span class="mono hint">гонорар ${esc(it.fee||'—')} · пошлина ${esc(it.duty||'—')}</span>
-            </label>`).join('')}`).join('')}
-      </details>
-
-      <div class="grid2" style="margin-top:10px">
-        <div class="field" style="padding:8px 0"><label>Сумма работ, ₽</label>
-          <input id="kp-work" type="text" inputmode="decimal" value="${esc(kf.work)}"/></div>
-        <div class="field" style="padding:8px 0"><label>Сумма пошлин, ₽</label>
-          <input id="kp-duty" type="text" inputmode="decimal" value="${esc(kf.duty)}"/></div>
-      </div>
-      ${kf.picked.size ? `<div class="hint" style="margin-top:6px">По выбранным услугам: гонорар ≈ ${fmtInt(pickedFeeSum)} ₽, пошлина ≈ ${fmtInt(pickedDutySum)} ₽ — <a href="#" id="kp-applysum">подставить в поля выше</a></div>` : ''}
-
-      <button class="btn primary" id="kp-go" style="margin-top:14px">Сформировать КП (.docx)</button>
-    </div>` : ''}`;
-
-  const q = sel => $('#view '+sel);
-  const tb = q('#kp-templates-box'); if(tb) tb.ontoggle = ()=>{ kf.templatesOpen = tb.open; };
-  const pb = q('#kp-picker-box'); if(pb) pb.ontoggle = ()=>{ kf.pickerOpen = pb.open; };
-  q('#kp-upload').onclick = async ()=>{
-    const file = q('#kp-file').files[0];
-    if(!file){ toast('Выберите файл .docx', true); return; }
-    const name = q('#kp-name').value.trim() || file.name.replace(/\.docx$/i,'');
-    try{
-      const buf = await file.arrayBuffer();
-      const r = await fetch('/api/kp-templates?name='+encodeURIComponent(name), {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/octet-stream'}, body:buf});
-      const data = await r.json();
-      if(!r.ok) throw new Error(data.error||'Ошибка загрузки');
-      toast('Шаблон загружен'); kf.templatesOpen = true; await loadRoute(); renderKp();
-    }catch(e){ toast(e.message,true); }
-  };
-  document.querySelectorAll('#view [data-kpdel]').forEach(b=> b.onclick = async ()=>{
-    if(!confirm('Удалить этот шаблон?')) return;
-    try{ await api('/kp-templates/'+b.dataset.kpdel,{method:'DELETE'}); await loadRoute(); renderKp(); }
-    catch(e){ toast(e.message,true); }
-  });
-  if(q('#kp-template')) q('#kp-template').onchange = e=>{ kf.templateId = e.target.value; };
-  if(q('#kp-customer')) q('#kp-customer').oninput = e=>{ kf.customer = e.target.value; };
-  if(q('#kp-work')) q('#kp-work').oninput = e=>{ kf.work = e.target.value; };
-  if(q('#kp-duty')) q('#kp-duty').oninput = e=>{ kf.duty = e.target.value; };
-  document.querySelectorAll('#view [data-kppick]').forEach(cb=> cb.onchange = ()=>{
-    if(cb.checked) kf.picked.add(cb.dataset.kppick); else kf.picked.delete(cb.dataset.kppick);
-    renderKp();
-  });
-  if(q('#kp-applysum')) q('#kp-applysum').onclick = e=>{
-    e.preventDefault();
-    kf.work = pickedFeeSum ? String(pickedFeeSum) : kf.work;
-    kf.duty = pickedDutySum ? String(pickedDutySum) : kf.duty;
-    renderKp();
-  };
-  if(q('#kp-go')) q('#kp-go').onclick = ()=>{
-    if(!kf.templateId){ toast('Выберите шаблон', true); return; }
-    const url = '/api/kp-templates/'+kf.templateId+'/generate?customer='+encodeURIComponent(kf.customer)+'&work='+encodeURIComponent(kf.work)+'&duty='+encodeURIComponent(kf.duty);
-    window.open(url, '_blank');
-  };
-}
-
 function renderTrash(){
   const t = state.trash;
   if(!t){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
@@ -1567,7 +1450,6 @@ function renderAll(){
   else if(state.route==='messages') renderMessages();
   else if(state.route==='price') renderPrice();
   else if(state.route==='cases') renderCases();
-  else if(state.route==='kp') renderKp();
   else if(state.route==='trash') renderTrash();
   else if(state.route==='log') renderLog();
 }

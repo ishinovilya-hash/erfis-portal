@@ -111,13 +111,6 @@ CREATE TABLE IF NOT EXISTS cases (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_cases_category ON cases(category);
-CREATE TABLE IF NOT EXISTS kp_templates (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL DEFAULT '',
-  content BLOB NOT NULL,
-  uploaded_by TEXT,
-  uploaded_at TEXT NOT NULL
-);
 `);
 
 // --- миграции для существующих баз ---

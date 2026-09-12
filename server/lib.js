@@ -44,20 +44,6 @@ export function readBody(req, limit = 1_000_000) {
   });
 }
 
-export function readRawBody(req, limit = 10_000_000) {
-  return new Promise((resolve, reject) => {
-    let size = 0;
-    const chunks = [];
-    req.on('data', (c) => {
-      size += c.length;
-      if (size > limit) { reject(new Error('payload too large')); req.destroy(); return; }
-      chunks.push(c);
-    });
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
-  });
-}
-
 export function parseCookies(req) {
   const out = {};
   const h = req.headers.cookie;
