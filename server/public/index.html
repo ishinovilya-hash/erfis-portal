@@ -1073,7 +1073,7 @@ function renderPayments(){
           </div>`).join('')}
         </div>`:''}
 
-        <button class="btn" id="pay-reset" style="margin-top:16px;width:100%">Сбросить</button>
+        <button class="btn danger" id="pay-reset" style="margin-top:16px;width:100%">Сбросить</button>
       </div>
 
       <div class="qrpane" id="qrpane"></div>
@@ -1277,7 +1277,7 @@ function renderMessages(){
       <div class="qrpane">
         <textarea id="msg-text" readonly rows="16" style="width:100%;resize:vertical;font-family:var(--mono,monospace);font-size:13px;line-height:1.5;padding:14px;border-radius:10px;border:1px solid var(--hairline-2);background:var(--panel-2,transparent);color:inherit">${esc(text)}</textarea>
         <button class="btn primary" id="msg-copy" style="margin-top:12px;width:100%">Скопировать текст</button>
-        <button class="btn" id="msg-reset" style="margin-top:8px;width:100%">Сбросить</button>
+        <button class="btn danger" id="msg-reset" style="margin-top:8px;width:100%">Сбросить</button>
       </div>
     </div>`;
 
