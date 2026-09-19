@@ -62,20 +62,6 @@ CREATE TABLE IF NOT EXISTS activity (
 );
 CREATE INDEX IF NOT EXISTS idx_activity_object ON activity(object_id);
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS mood_entries (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id TEXT NOT NULL,
-  date TEXT NOT NULL,
-  mood INTEGER,
-  workload TEXT NOT NULL DEFAULT 'ok',
-  worked INTEGER NOT NULL DEFAULT 1,
-  note TEXT NOT NULL DEFAULT '',
-  factors TEXT NOT NULL DEFAULT '[]',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  UNIQUE(user_id, date)
-);
-CREATE INDEX IF NOT EXISTS idx_mood_date ON mood_entries(date);
 CREATE TABLE IF NOT EXISTS price_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   category TEXT NOT NULL DEFAULT '',
@@ -134,6 +120,8 @@ if (!tableCols('users').includes('failed_attempts')) {
 if (!tableCols('users').includes('locked_at')) {
   db.exec('ALTER TABLE users ADD COLUMN locked_at TEXT');
 }
+// Раздел «Трекер настроения команды» отменён: удаляем оставшиеся персональные данные.
+db.exec('DROP TABLE IF EXISTS mood_entries');
 
 // ---------- password helpers (scrypt, no native deps) ----------
 export function hashPassword(pw) {
