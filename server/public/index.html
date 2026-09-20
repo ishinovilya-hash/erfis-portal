@@ -1,14 +1,11 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="dark">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="light dark" />
 <title>ЭРФИС Портал</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
 <style>
 :root{
   --paper:#F4F5F8; --surface:#FFFFFF; --surface-2:#FAFAFC;
@@ -269,6 +266,103 @@ td.num{white-space:nowrap}
   .menutoggle{display:grid!important}
 }
 .menutoggle{display:none}
+/* Mercury: shared surfaces and controls, retaining ERFIS identity and status semantics. */
+:root,:root[data-theme="dark"]{
+  --paper:#171721;--surface:#1e1e2a;--surface-2:#272735;
+  --ink:#ededf3;--ink-2:#c3c3cc;--ink-3:#a3a3b3;
+  --hairline:#3e3e50;--hairline-2:#30303f;
+  --brand:#171721;--accent:#5266eb;--accent-ink:#fff;--accent-soft:#272735;
+  --ok:#9fd6bd;--ok-bg:#243830;--warn:#efc779;--warn-bg:#3d3425;
+  --flag-bg:#393223;--flag-edge:#dbb65f;--crit:#f0a3a3;--crit-bg:#402b31;
+  --shadow-sm:none;--shadow-lg:none;--r:12px;
+  --panel-2:var(--surface-2);--mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --paper:#f3f3f7;--surface:#fff;--surface-2:#eaeaf1;
+  --ink:#252532;--ink-2:#505060;--ink-3:#666678;
+  --hairline:#cfcfdc;--hairline-2:#e5e5ed;--accent-soft:#eaeaf1;
+  --ok:#286546;--ok-bg:#e3efe7;--warn:#795713;--warn-bg:#f7edd7;
+  --flag-bg:#fff3d5;--flag-edge:#a97b23;--crit:#a33343;--crit-bg:#fae6ea;
+  color-scheme:light;
+}
+body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.5}
+h1,h2,h3{font-family:inherit;font-weight:480;letter-spacing:.015em}
+.mono,.when{font-family:var(--mono)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:4px}
+a{color:inherit;text-underline-offset:3px}
+input::placeholder,textarea::placeholder{color:var(--ink-3);opacity:1}
+.side{width:254px;flex-basis:254px;color:#c3c3cc;border-right:1px solid #30303f;overflow-y:auto}
+.side .brand{padding:32px 26px 24px;gap:14px}
+.side .brand .logo-full{width:100px;color:#ededf3}
+.side .brand .sub,.side .foot{color:#a3a3b3}
+.nav{padding:0 14px 24px;gap:4px}
+.nav .sec{color:#a3a3b3;font-size:10px;letter-spacing:.12em;padding:24px 14px 8px}
+.nav a{border-radius:40px;padding:10px 14px;color:#c3c3cc;font-weight:400;font-size:13px}
+.nav a.active,.nav a:hover{background:#272735;color:#ededf3}
+.nav a .count{background:#363646;color:#ededf3;font-variant-numeric:tabular-nums}
+.side .foot{padding:20px 26px}
+.topbar{padding:24px 32px;gap:12px;background:var(--paper);border-bottom:1px solid var(--hairline-2);flex-wrap:wrap}
+.topbar h1{font-size:clamp(20px,1.8vw,28px);line-height:1.2;margin-top:5px}
+.topbar .crumb{font-size:11px;letter-spacing:.08em}
+.search{width:clamp(180px,22vw,320px)}
+.search input{padding:12px 16px 12px 40px;border-radius:32px;background:var(--surface);border-color:var(--hairline)}
+.search svg{left:16px;top:16px}
+.iconbtn{width:40px;height:40px;border-radius:50%;flex-shrink:0;background:var(--surface)}
+.userchip{background:var(--surface);padding:7px;gap:10px;font-size:12px}
+.avatar{background:var(--surface-2);color:var(--ink);width:28px;height:28px;font-weight:480}
+.avatar.sm{width:24px;height:24px}
+.content{padding:32px 32px 72px}
+.toolbar{gap:12px;margin-bottom:24px}
+.btn{padding:10px 20px;border-radius:32px;font-weight:480;justify-content:center;min-height:42px}
+.btn.primary{background:#5266eb;border-color:#5266eb;color:#fff}
+.btn:hover{background:var(--surface-2)}
+.btn.primary:hover{background:#6073f2}
+.chipfilter{padding:10px 16px;border-radius:32px;min-height:42px}
+select option{background:var(--surface);color:var(--ink)}
+.seg{border:0;border-radius:24px;background:var(--surface);padding:4px;gap:4px;flex-wrap:wrap}
+.seg button{border:0;border-radius:32px;padding:9px 16px;background:transparent;font-weight:400}
+.seg button[aria-pressed="true"]{background:var(--surface-2);color:var(--ink);font-weight:500}
+.tablewrap,.listcard,.qrpane,.reqbox{border:0;box-shadow:none;border-radius:12px}
+thead th{padding:16px;font-weight:480;background:var(--surface);color:var(--ink-3)}
+tbody td{padding:16px;line-height:1.55}
+td.name{font-weight:480;min-width:160px}
+td.holder{min-width:160px}
+.tag{font-weight:480;padding:4px 10px}
+.otype{border-radius:40px;padding:3px 9px;font-weight:480}
+.demoline{border:0;background:transparent;padding:0 0 8px;font-size:13px;line-height:1.6}
+.panel{width:min(560px,100vw);box-shadow:none}
+.panel header{padding:28px 32px}.panel header h2{font-size:24px;overflow-wrap:anywhere}
+.panel .body{padding:12px 32px 32px}.panel .actions{padding:20px 32px;flex-wrap:wrap}
+.panel .close{width:36px;height:36px;border-radius:50%}
+.field{padding:18px 0}.field label{font-size:11px;letter-spacing:.06em;margin-bottom:8px}
+.field input,.field select,.reminderbox .rb-body input,.reqfield input{border-radius:32px;padding:11px 16px}
+.field textarea{border-radius:12px;padding:14px 16px;line-height:1.6}
+.field .val{overflow-wrap:anywhere}
+.reminderbox{border-radius:12px}.reminderbox .rb-head{padding:16px;font-weight:480}
+.reminderbox .rb-body{padding:20px}.grid2{gap:16px}
+.listcard .lrow{padding:20px 24px}.lrow .lr-t{font-weight:480}.lr-s{overflow-wrap:anywhere}
+.paygrid{gap:24px;grid-template-columns:minmax(0,1fr) 340px}.paygrid>div{min-width:0}
+.qrpane{padding:24px;top:120px}.qrbox{max-width:100%;padding:12px}.qrbox svg{width:100%;max-width:280px;height:auto}
+.hotbtns{gap:8px}.chip{border:1px solid var(--hairline);background:var(--surface-2);border-radius:32px;padding:9px 14px;color:var(--ink-2)}
+.chip:hover{border-color:var(--ink-3);color:var(--ink)}
+.hotbtns .chip{padding:8px 12px;line-height:1.5;text-align:left}
+.price-cat{font-size:20px;font-weight:480;margin:32px 0 16px}
+.toast{background:var(--surface-2);color:var(--ink);border:1px solid var(--hairline);border-radius:24px}
+.toast.err{background:var(--crit-bg);color:var(--crit)}
+.bellmenu{top:50px;border-radius:12px;max-width:calc(100vw - 28px)}
+#login,#pwchange{background:#171721;overflow:auto;color:#ededf3}
+:is(#login,#pwchange) .card{background:#1e1e2a;border-radius:12px;padding:40px 32px;max-width:440px}
+:is(#login,#pwchange) .login-logo{width:140px;margin-bottom:32px}
+:is(#login,#pwchange) h1{font-size:28px;font-weight:480;color:#ededf3}
+:is(#login,#pwchange) p,:is(#login,#pwchange) label{color:#c3c3cc}
+:is(#login,#pwchange) .fine{color:#a3a3b3}
+:is(#login,#pwchange) input{background:#272735;border:1px solid #505064;border-radius:32px;padding:12px 16px}
+:is(#login,#pwchange) form{gap:18px}
+:is(#login,#pwchange) .submit{background:#5266eb;color:#fff;border-radius:32px;padding:13px;font-weight:480}
+@media(max-width:1150px){.paygrid{grid-template-columns:minmax(0,1fr)}.qrpane{position:static}.search{width:180px}.topbar{padding:20px 24px}}
+@media(max-width:880px){.content{padding:24px 16px 48px}.topbar{padding:16px;gap:10px}.topbar h1{font-size:20px}.search{order:5;flex-basis:100%;width:100%}.side{width:254px}.userchip{margin-left:auto}.bellmenu{position:fixed;top:84px;right:14px}.qrpane{padding:20px}}
+@media(max-width:480px){.grid2{grid-template-columns:1fr}.panel header,.panel .actions{padding:20px}.panel .body{padding:8px 20px 24px}.toolbar .spacer{display:none}.toolbar .btn{flex:1}.seg button{padding:9px 12px}.listcard .lrow{padding:16px;flex-wrap:wrap}.userchip #mename{display:none}:is(#login,#pwchange) .card{padding:28px 20px}.hotbtns{min-width:0;flex-basis:100%}}
 </style>
 </head>
 <body>
@@ -1626,10 +1720,10 @@ function renderAll(){
 function applyTheme(){
   try{ state.theme = localStorage.getItem('erfis_theme'); }catch(e){}
   if(state.theme) document.documentElement.setAttribute('data-theme', state.theme);
-  else document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', 'dark');
 }
 function toggleTheme(){
-  const cur = state.theme || (matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+  const cur = state.theme || 'dark';
   state.theme = cur==='dark'?'light':'dark';
   try{ localStorage.setItem('erfis_theme', state.theme); }catch(e){}
   applyTheme();

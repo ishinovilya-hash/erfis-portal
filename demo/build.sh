@@ -10,18 +10,17 @@ logo = open('server/public/logo.js').read()
 seed = open('server/data/seed.json').read()
 price = open('server/data/price-seed.json').read()
 mock = open('demo/mock.js').read()
+qr = open('server/public/qrcode.js').read()
 html = open('server/public/index.html').read()
 
 html = html.replace('<script src="/logo.js"></script>', f'<script>{logo}</script>')
-html = html.replace('<script src="/qrcode.js"></script>',
-                    '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>')
-marker = '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>'
-html = html.replace(marker, marker + f'\n<script>window.__SEED = {seed};\nwindow.__PRICE = {price};</script>\n<script>{mock}</script>\n', 1)
-html = html.replace('<title>Реестр объектов ЭРФИС</title>', '<title>Портал ЭРФИС — демо</title>')
+marker = '<script src="/qrcode.js"></script>'
+html = html.replace(marker, '<script>' + qr + '</script>' + f'\n<script>window.__SEED = {seed};\nwindow.__PRICE = {price};</script>\n<script>{mock}</script>\n', 1)
+html = html.replace('<title>ЭРФИС Портал</title>', '<title>Портал ЭРФИС — локальный просмотр</title>')
 open('demo/index.html', 'w').write(html)
 
 a = html
-a = a.replace('<!doctype html>\n<html lang="ru">\n<head>\n', '', 1)
+a = a.replace('<!doctype html>\n<html lang="ru" data-theme="dark">\n<head>\n', '', 1)
 a = a.replace('<meta charset="utf-8" />\n', '', 1)
 a = a.replace('<meta name="viewport" content="width=device-width, initial-scale=1" />\n', '', 1)
 a = a.replace('</head>\n<body>\n', '', 1)
