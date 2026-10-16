@@ -1,7 +1,7 @@
 /* Демо-режим портала ЭРФИС: подменяет /api/* на локальное хранилище браузера.
    Данные не уходят на сервер. Всё живёт в этом браузере (localStorage). */
 (function () {
-  const KEY = 'erfis_demo_v7';
+  const KEY = 'erfis_demo_v8';
   const nowISO = () => new Date().toISOString();
   const todayMSK = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
   const DAY = 86400000, SOON = 183;
@@ -68,9 +68,9 @@
     const price = (window.__PRICE || []).map((p, i) => ({ id: i + 1, category: p.category || '', name: p.name || '', fee: p.fee || '', duty: p.duty || '', total: p.total || '', note: p.note || '', updatedAt: null, updatedBy: null }));
 
     return {
-      session: null, objects, payments: [], requisites: { ...REQUISITES }, price,
+      session: null, objects, payments: [], requisites: { ...REQUISITES }, price, trips: [],
       activity: [{ id: 1, at: nowISO(), kind: 'import', text: `Импорт данных — ${objects.length} объектов`, userId: null }],
-      seq: { activity: 2, payment: 1, price: price.length + 1 },
+      seq: { activity: 2, payment: 1, price: price.length + 1, trip: 1 },
     };
   }
 
@@ -188,6 +188,24 @@
       }
       if (path === '/activity') return J({ activity: db.activity.slice(-Number(q.get('limit') || 300)).reverse() });
 
+      // ---- business trips ----
+      if (path === '/trips' && method === 'GET') {
+        const from=q.get('from'), to=q.get('to');
+        return J({trips:(db.trips||[]).filter(t=>t.startDate<=to&&t.endDate>=from).sort((a,b)=>a.startDate.localeCompare(b.startDate))});
+      }
+      if (path === '/trips' && method === 'POST') {
+        if(!body.employeeId) return J({error:'Выберите сотрудника'},400);
+        if(!String(body.destination||'').trim()) return J({error:'Укажите место командировки'},400);
+        if(!body.startDate||!body.endDate||body.endDate<body.startDate) return J({error:'Проверьте даты командировки'},400);
+        const t={id:'trip-n'+(db.seq.trip++),employeeId:body.employeeId,destination:String(body.destination).trim(),purpose:String(body.purpose||'').trim(),client:String(body.client||'').trim(),startDate:body.startDate,endDate:body.endDate,createdBy:db.session,createdAt:nowISO(),updatedAt:nowISO()};
+        db.trips.push(t);logAct('trip',null,`Добавлена командировка: ${t.destination}`);save();return J({trip:t});
+      }
+      if(seg[0]==='trips'&&seg[1]){
+        const t=(db.trips||[]).find(x=>x.id===seg[1]);if(!t)return J({error:'not found'},404);
+        if(method==='PATCH'){['employeeId','destination','purpose','client','startDate','endDate'].forEach(k=>{if(k in body)t[k]=String(body[k]??'').trim();});t.updatedAt=nowISO();logAct('trip',null,`Изменена командировка: ${t.destination}`);save();return J({trip:t});}
+        if(method==='DELETE'){db.trips=db.trips.filter(x=>x.id!==t.id);logAct('trip',null,`Удалена командировка: ${t.destination}`);save();return J({ok:true});}
+      }
+
       if (path === '/export') {
         const type = q.get('type');
         let rows = db.objects.filter((o) => o.type === type && !o.deletedAt).map(toApi);
@@ -214,6 +232,7 @@
           shipments: act.filter((o) => o.type === 'shipment').length,
           contracts: act.filter((o) => o.type === 'contract').length,
           price: db.price.length,
+          trips: (db.trips || []).length,
           trash: db.objects.filter((o) => o.deletedAt).length,
           activity: db.activity.length,
           remindersDue: act.filter((o) => remDue(o.reminder)).length,

@@ -118,6 +118,19 @@ CREATE TABLE IF NOT EXISTS clients (
   updated_at TEXT NOT NULL,
   updated_by TEXT
 );
+CREATE TABLE IF NOT EXISTS business_trips (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT NOT NULL,
+  destination TEXT NOT NULL,
+  purpose TEXT NOT NULL DEFAULT '',
+  client TEXT NOT NULL DEFAULT '',
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_business_trips_dates ON business_trips(start_date, end_date);
 `);
 
 // --- миграции для существующих баз ---

@@ -348,6 +348,7 @@ td.holder{min-width:160px}
 .chip:hover{border-color:var(--ink-3);color:var(--ink)}
 .hotbtns .chip{padding:8px 12px;line-height:1.5;text-align:left}
 .price-cat{font-size:20px;font-weight:480;margin:32px 0 16px}
+.trip-head{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}.trip-head h2{font-size:22px;margin:0;font-weight:480}.trip-legend{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 18px}.trip-legend span{display:flex;align-items:center;gap:7px;color:var(--ink-2);font-size:12px}.trip-dot{width:9px;height:9px;border-radius:50%}.calendar{display:grid;grid-template-columns:repeat(7,minmax(110px,1fr));min-width:780px;background:var(--hairline-2);gap:1px;border-radius:12px;overflow:hidden}.cal-wrap{overflow:auto;border-radius:12px}.cal-weekday{background:var(--surface-2);padding:11px 10px;color:var(--ink-3);font-size:11px;letter-spacing:.06em;text-align:center}.cal-day{background:var(--surface);min-height:122px;padding:9px;overflow:hidden}.cal-day.out{background:color-mix(in srgb,var(--surface) 55%,var(--paper));color:var(--ink-3)}.cal-day.today{box-shadow:inset 0 0 0 2px var(--accent)}.cal-num{font-size:12px;margin-bottom:7px}.trip-event{display:block;width:100%;border:0;border-left:4px solid var(--trip-color);background:color-mix(in srgb,var(--trip-color) 18%,var(--surface));color:var(--ink);border-radius:7px;padding:6px 7px;margin:0 0 5px;text-align:left;font:inherit;cursor:pointer;line-height:1.3}.trip-event strong{display:block;font-size:11px;font-weight:600}.trip-event small{display:block;font-size:10px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.trip-form{padding:20px;margin-bottom:20px}.trip-form .field{padding:8px 0}
 .toast{background:var(--surface-2);color:var(--ink);border:1px solid var(--hairline);border-radius:24px}
 .toast.err{background:var(--crit-bg);color:var(--crit)}
 .bellmenu{top:50px;border-radius:12px;max-width:calc(100vw - 28px)}
@@ -478,6 +479,7 @@ const state = {
   route:'trademarks',
   objects:{trademark:null, patent:null, software:null, shipment:null, contract:null},
   reminders:null, trash:null, activity:null, price:null, priceEdit:null, contractKind:'legal',
+  trips:null, tripForm:null, tripMonth:new Date(new Date().getFullYear(),new Date().getMonth(),1),
   ui:{sort:{key:'holder',dir:1}, status:'', resp:'', flag:'', q:''},
   panel:null,
   bellOpen:false,
@@ -538,6 +540,7 @@ const ROUTES = {
   price:{title:'Прайс ЭРФИС', crumb:'Инструменты'},
   cases:{title:'Библиотека кейсов', crumb:'Инструменты'},
   clients:{title:'Клиенты 360°', crumb:'Инструменты'},
+  trips:{title:'Командировки', crumb:'Команда'},
   trash:{title:'Корзина', crumb:'Служебное'},
   log:{title:'Журнал изменений', crumb:'Служебное'},
 };
@@ -546,7 +549,7 @@ function go(r){
   state.route = r;
   state.ui.sort = {key:'holder',dir:1};
   state.ui.status=''; state.ui.resp=''; state.ui.flag='';
-  state.priceEdit = null; state.payForm = null; state.contractKind = 'legal';
+  state.priceEdit = null; state.payForm = null; state.contractKind = 'legal'; state.tripForm = null;
   history.replaceState(null,'','#/'+r);
   renderAll();
   refresh().catch(e=> toast(e.message, true));
@@ -571,6 +574,13 @@ async function loadRoute(){
   else if(r==='price') state.price = (await api('/price')).items;
   else if(r==='cases') state.cases = (await api('/cases')).cases;
   else if(r==='clients') state.clientsList = (await api('/clients')).clients;
+  else if(r==='trips'){
+    const m=state.tripMonth, first=new Date(m.getFullYear(),m.getMonth(),1), from=new Date(first);
+    from.setDate(first.getDate()-((first.getDay()+6)%7));
+    const to=new Date(from); to.setDate(from.getDate()+41);
+    const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    state.trips=(await api(`/trips?from=${iso(from)}&to=${iso(to)}`)).trips;
+  }
 }
 async function loadCounts(){
   try{ state.health = await api('/health'); }catch(e){}
@@ -591,6 +601,8 @@ function renderNav(){
     {r:'software', label:'Программы для ЭВМ', count:h.software, ic:'M4 5h16v11H4zM2 20h20M9 16v4M15 16v4'},
     {r:'shipments', label:'Реестр отправлений', count:h.shipments, ic:'M3 8l9-5 9 5-9 5-9-5zM3 8v8l9 5 9-5V8M12 13v8'},
     {r:'contracts', label:'Договоры контрагентов', count:h.contracts, ic:'M7 3h7l5 5v13H7zM14 3v5h5M9 13h6M9 17h6'},
+    {sec:'Команда'},
+    {r:'trips', label:'Командировки', count:h.trips||null, ic:'M3 7h18v12H3zM8 7V5h8v2M3 12h18M9 12v2M15 12v2'},
     {sec:'Контроль сроков'},
     {r:'reminders', label:'Напоминания', count:dueTotal||null, flag:!!dueTotal, ic:'M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'},
     {sec:'Инструменты'},
@@ -1466,6 +1478,82 @@ function renderPrice(){
   };
 }
 
+/* ---------- Командировки ---------- */
+const TRIP_COLORS = {
+  u_ishinov:'#4f7cff', u_milyukov:'#39a96b', u_konovalova:'#e86fa7', u_petrov:'#e2b93b'
+};
+const tripColor = id => TRIP_COLORS[id] || '#8d8da3';
+const localISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+function renderTrips(){
+  const items = state.trips;
+  if(!items){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
+  const m = state.tripMonth;
+  const monthTitle = m.toLocaleDateString('ru-RU',{month:'long',year:'numeric'}).replace(/^./,c=>c.toUpperCase());
+  const first = new Date(m.getFullYear(),m.getMonth(),1);
+  const gridStart = new Date(first);
+  gridStart.setDate(first.getDate()-((first.getDay()+6)%7));
+  const today = localISO(new Date());
+  const days = Array.from({length:42},(_,i)=>{ const d=new Date(gridStart); d.setDate(d.getDate()+i); return d; });
+  const form = state.tripForm;
+  const formHtml = form ? `<div class="listcard trip-form">
+    <div class="grid2">
+      <div class="field"><label>Сотрудник</label><select id="trip-employee">${state.users.map(u=>`<option value="${u.id}" ${form.employeeId===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>Куда едет</label><input id="trip-destination" value="${esc(form.destination)}" placeholder="Город, организация"/></div>
+      <div class="field"><label>Дата начала</label><input id="trip-start" type="date" value="${esc(form.startDate)}"/></div>
+      <div class="field"><label>Дата окончания</label><input id="trip-end" type="date" value="${esc(form.endDate)}"/></div>
+      <div class="field"><label>Клиент</label><input id="trip-client" value="${esc(form.client)}" placeholder="Название клиента"/></div>
+      <div class="field"><label>Цель поездки</label><input id="trip-purpose" value="${esc(form.purpose)}" placeholder="Зачем едет"/></div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn primary" id="trip-save">${form.id?'Сохранить':'Добавить командировку'}</button>
+      <button class="btn" id="trip-cancel">Отмена</button>
+      ${form.id?'<span class="spacer"></span><button class="btn danger" id="trip-delete">Удалить</button>':''}
+    </div>
+  </div>` : '';
+  const weekdays=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+  const cells = days.map(d=>{
+    const ds=localISO(d), inMonth=d.getMonth()===m.getMonth();
+    const onDay=items.filter(t=>t.startDate<=ds&&t.endDate>=ds);
+    return `<div class="cal-day ${inMonth?'':'out'} ${ds===today?'today':''}" data-tripday="${ds}">
+      <div class="cal-num">${d.getDate()}</div>
+      ${onDay.map(t=>`<button class="trip-event" data-trip="${t.id}" style="--trip-color:${tripColor(t.employeeId)}" title="${esc(t.purpose||t.destination)}">
+        <strong>${esc(firstName(userName(t.employeeId)||''))} · ${esc(t.destination)}</strong>
+        <small>${esc(t.client||t.purpose||'Командировка')}</small>
+      </button>`).join('')}
+    </div>`;
+  }).join('');
+  $('#view').innerHTML=`
+    <div class="demoline">Общий календарь поездок сотрудников. Нажмите на день, чтобы быстро добавить командировку.</div>
+    <div class="trip-head">
+      <button class="btn" id="trip-prev" aria-label="Предыдущий месяц">←</button>
+      <h2>${esc(monthTitle)}</h2>
+      <button class="btn" id="trip-next" aria-label="Следующий месяц">→</button>
+      <button class="btn" id="trip-today">Сегодня</button>
+      <span class="spacer"></span><button class="btn primary" id="trip-new">Добавить командировку</button>
+    </div>
+    <div class="trip-legend">${state.users.map(u=>`<span><i class="trip-dot" style="background:${tripColor(u.id)}"></i>${esc(u.name)}</span>`).join('')}</div>
+    ${formHtml}
+    <div class="cal-wrap"><div class="calendar">${weekdays.map(w=>`<div class="cal-weekday">${w}</div>`).join('')}${cells}</div></div>`;
+
+  const openNew = date=>{ state.tripForm={id:null,employeeId:state.me.id,destination:'',purpose:'',client:'',startDate:date,endDate:date}; renderTrips(); };
+  $('#trip-prev').onclick=async()=>{ state.tripMonth=new Date(m.getFullYear(),m.getMonth()-1,1); state.tripForm=null; state.trips=null; renderTrips(); await loadRoute(); renderTrips(); };
+  $('#trip-next').onclick=async()=>{ state.tripMonth=new Date(m.getFullYear(),m.getMonth()+1,1); state.tripForm=null; state.trips=null; renderTrips(); await loadRoute(); renderTrips(); };
+  $('#trip-today').onclick=async()=>{ const n=new Date(); state.tripMonth=new Date(n.getFullYear(),n.getMonth(),1); state.tripForm=null; state.trips=null; renderTrips(); await loadRoute(); renderTrips(); };
+  $('#trip-new').onclick=()=>openNew(today);
+  document.querySelectorAll('#view [data-tripday]').forEach(el=>el.onclick=e=>{ if(e.target.closest('[data-trip]')) return; openNew(el.dataset.tripday); });
+  document.querySelectorAll('#view [data-trip]').forEach(el=>el.onclick=e=>{ e.stopPropagation(); const t=items.find(x=>x.id===el.dataset.trip); if(t){state.tripForm={...t};renderTrips();} });
+  const cancel=$('#view #trip-cancel'); if(cancel) cancel.onclick=()=>{state.tripForm=null;renderTrips();};
+  const save=$('#view #trip-save'); if(save) save.onclick=async()=>{
+    const body={employeeId:$('#trip-employee').value,destination:$('#trip-destination').value.trim(),startDate:$('#trip-start').value,endDate:$('#trip-end').value,client:$('#trip-client').value.trim(),purpose:$('#trip-purpose').value.trim()};
+    if(!body.destination){toast('Укажите, куда едет сотрудник',true);return;}
+    if(!body.startDate||!body.endDate){toast('Укажите даты командировки',true);return;}
+    if(body.endDate<body.startDate){toast('Дата окончания раньше даты начала',true);return;}
+    try{ if(form.id) await api('/trips/'+form.id,{method:'PATCH',body:jbody(body)}); else await api('/trips',{method:'POST',body:jbody(body)}); state.tripForm=null; await loadRoute(); renderTrips(); toast('Командировка сохранена'); }catch(e){toast(e.message,true);}
+  };
+  const del=$('#view #trip-delete'); if(del) del.onclick=async()=>{ if(!confirm('Удалить командировку?'))return; try{await api('/trips/'+form.id,{method:'DELETE'});state.tripForm=null;await loadRoute();renderTrips();toast('Командировка удалена');}catch(e){toast(e.message,true);} };
+}
+
 /* ---------- Библиотека кейсов ---------- */
 const CASE_CATEGORIES = [['court','Судебный спор'],['tm','Регистрация ТЗ'],['patent','Патентование']];
 const caseCatLabel = k => (CASE_CATEGORIES.find(c=>c[0]===k)||[null,k])[1];
@@ -1712,6 +1800,7 @@ function renderAll(){
   else if(state.route==='price') renderPrice();
   else if(state.route==='cases') renderCases();
   else if(state.route==='clients') renderClients();
+  else if(state.route==='trips') renderTrips();
   else if(state.route==='trash') renderTrash();
   else if(state.route==='log') renderLog();
 }

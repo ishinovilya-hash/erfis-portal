@@ -718,6 +718,77 @@ route('PATCH', '/api/clients/:key', async (req, res, p) => {
   json(res, 200, { key, name, website });
 });
 
+// ---- командировки ----
+const tripApi = (r) => ({
+  id: r.id, employeeId: r.employee_id, destination: r.destination,
+  purpose: r.purpose, client: r.client, startDate: r.start_date, endDate: r.end_date,
+  createdBy: r.created_by, createdAt: r.created_at, updatedAt: r.updated_at,
+});
+const validDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+const validEmployee = (id) => EMPLOYEES.some((e) => e.id === id);
+
+route('GET', '/api/trips', async (req, res, _p, url) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const from = url.searchParams.get('from');
+  const to = url.searchParams.get('to');
+  if (!validDate(from) || !validDate(to)) return json(res, 400, { error: 'Укажите период' });
+  const rows = db.prepare(`SELECT * FROM business_trips
+    WHERE start_date <= ? AND end_date >= ? ORDER BY start_date, employee_id`).all(to, from);
+  json(res, 200, { trips: rows.map(tripApi) });
+});
+
+route('POST', '/api/trips', async (req, res) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const b = await readBody(req);
+  if (!validEmployee(b.employeeId)) return json(res, 400, { error: 'Выберите сотрудника' });
+  if (!String(b.destination || '').trim()) return json(res, 400, { error: 'Укажите место командировки' });
+  if (!validDate(b.startDate) || !validDate(b.endDate)) return json(res, 400, { error: 'Укажите даты командировки' });
+  if (b.endDate < b.startDate) return json(res, 400, { error: 'Дата окончания не может быть раньше даты начала' });
+  const id = 'trip-n' + randomBytes(4).toString('hex');
+  const now = new Date().toISOString();
+  db.prepare(`INSERT INTO business_trips
+    (id,employee_id,destination,purpose,client,start_date,end_date,created_by,created_at,updated_at)
+    VALUES (@id,@employee_id,@destination,@purpose,@client,@start_date,@end_date,@created_by,@now,@now)`).run({
+    id, employee_id: b.employeeId, destination: String(b.destination).trim(),
+    purpose: String(b.purpose || '').trim(), client: String(b.client || '').trim(),
+    start_date: b.startDate, end_date: b.endDate, created_by: u.id, now,
+  });
+  logActivity('trip', null, `Добавлена командировка: ${String(b.destination).trim()} (${b.startDate} — ${b.endDate})`, u.id);
+  json(res, 200, { trip: tripApi(db.prepare('SELECT * FROM business_trips WHERE id = ?').get(id)) });
+});
+
+route('PATCH', '/api/trips/:id', async (req, res, p) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const row = db.prepare('SELECT * FROM business_trips WHERE id = ?').get(p.id);
+  if (!row) return json(res, 404, { error: 'not found' });
+  const b = await readBody(req);
+  const employeeId = b.employeeId ?? row.employee_id;
+  const destination = String(b.destination ?? row.destination).trim();
+  const purpose = String(b.purpose ?? row.purpose).trim();
+  const client = String(b.client ?? row.client).trim();
+  const startDate = b.startDate ?? row.start_date;
+  const endDate = b.endDate ?? row.end_date;
+  if (!validEmployee(employeeId)) return json(res, 400, { error: 'Выберите сотрудника' });
+  if (!destination) return json(res, 400, { error: 'Укажите место командировки' });
+  if (!validDate(startDate) || !validDate(endDate) || endDate < startDate)
+    return json(res, 400, { error: 'Проверьте даты командировки' });
+  const now = new Date().toISOString();
+  db.prepare(`UPDATE business_trips SET employee_id=?,destination=?,purpose=?,client=?,start_date=?,end_date=?,updated_at=? WHERE id=?`)
+    .run(employeeId, destination, purpose, client, startDate, endDate, now, row.id);
+  logActivity('trip', null, `Изменена командировка: ${destination} (${startDate} — ${endDate})`, u.id);
+  json(res, 200, { trip: tripApi(db.prepare('SELECT * FROM business_trips WHERE id = ?').get(row.id)) });
+});
+
+route('DELETE', '/api/trips/:id', async (req, res, p) => {
+  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
+  const row = db.prepare('SELECT * FROM business_trips WHERE id = ?').get(p.id);
+  if (row) {
+    db.prepare('DELETE FROM business_trips WHERE id = ?').run(row.id);
+    logActivity('trip', null, `Удалена командировка: ${row.destination} (${row.start_date} — ${row.end_date})`, u.id);
+  }
+  json(res, 200, { ok: true });
+});
+
 // ---- health / admin ----
 route('GET', '/api/health', async (_req, res) => {
   const c = (q) => db.prepare(q).get().c;
@@ -732,6 +803,7 @@ route('GET', '/api/health', async (_req, res) => {
     contracts: c("SELECT COUNT(*) c FROM objects WHERE type='contract' AND deleted_at IS NULL"),
     price: c('SELECT COUNT(*) c FROM price_items'),
     cases: c('SELECT COUNT(*) c FROM cases'),
+    trips: c('SELECT COUNT(*) c FROM business_trips'),
     trash: c('SELECT COUNT(*) c FROM objects WHERE deleted_at IS NOT NULL'),
     activity: c('SELECT COUNT(*) c FROM activity'),
     remindersDue: db.prepare("SELECT * FROM objects WHERE reminder IS NOT NULL AND deleted_at IS NULL").all()
