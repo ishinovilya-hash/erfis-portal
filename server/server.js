@@ -14,6 +14,7 @@ import {
   rowToApi, EDITABLE, EXTRA_KEYS, FIELD_LABELS, initialsOf,
 } from './lib.js';
 import { buildSoprovod, soprovodFilename, soprovodAvailable } from './soprovod.js';
+import { contractDefaults, moveRefused, importRegistryUpdate } from './registry-update.js';
 
 const OBJECT_TYPES = ['trademark', 'patent', 'software', 'shipment', 'contract'];
 
@@ -135,13 +136,37 @@ route('POST', '/api/password', async (req, res) => {
 // ---- registry ----
 const TYPE_PREFIX = { trademark: 'tm', patent: 'pt', software: 'sw', shipment: 'sh', contract: 'ct' };
 
+route('GET', '/api/contracts/defaults', async (req,res,_p,url) => {
+  if (!currentUser(req)) return json(res,401,{error:'auth'});
+  try { json(res,200,contractDefaults(db,url.searchParams.get('kind') || 'legal')); }
+  catch(e) { json(res,400,{error:e.message}); }
+});
+route('POST', '/api/objects/:id/refused', async (req,res,p) => {
+  const u=currentUser(req);
+  if (!u) return json(res,401,{error:'auth'});
+  const b=await readBody(req);
+  if (typeof b.refused !== 'boolean') return json(res,400,{error:'Укажите действие'});
+  try { moveRefused(db,p.id,b.refused,u.id); json(res,200,{object:rowToApi(getObj(p.id))}); }
+  catch(e) { json(res,400,{error:e.message}); }
+});
+route('POST', '/api/admin/registry-update', async (req,res,_p,url) => {
+  const u=currentUser(req);
+  if (!isManager(u)) return json(res,403,{error:'Только руководитель'});
+  try { json(res,200,importRegistryUpdate(db,await readBody(req,10_000_000),u.id,url.searchParams.get('preview')==='1')); }
+  catch(e) { json(res,400,{error:e.message}); }
+});
+
 route('GET', '/api/objects', async (req, res, _p, url) => {
   const u = currentUser(req);
   if (!u) return json(res, 401, { error: 'auth' });
   const type = url.searchParams.get('type');
+  if (type === 'refused') {
+    const rows=db.prepare('SELECT * FROM objects WHERE refused_at IS NOT NULL AND deleted_at IS NULL ORDER BY holder,name').all();
+    return json(res,200,{objects:rows.map(rowToApi)});
+  }
   if (!OBJECT_TYPES.includes(type)) return json(res, 400, { error: 'type' });
   const order = type === 'shipment' ? 'priority_date DESC, id DESC' : type === 'contract' ? 'holder, id' : 'holder, name';
-  const rows = db.prepare(`SELECT * FROM objects WHERE type = ? AND deleted_at IS NULL ORDER BY ${order}`).all(type);
+  const rows = db.prepare(`SELECT * FROM objects WHERE type = ? AND deleted_at IS NULL AND refused_at IS NULL ORDER BY ${order}`).all(type);
   json(res, 200, { objects: rows.map(rowToApi) });
 });
 
@@ -156,6 +181,13 @@ route('POST', '/api/objects', async (req, res) => {
   if (!u) return json(res, 401, { error: 'auth' });
   const b = await readBody(req);
   if (!OBJECT_TYPES.includes(b.type)) return json(res, 400, { error: 'type' });
+  if (b.type === 'contract') {
+    const defaults=contractDefaults(db,b.contractKind || 'legal');
+    b.regNumber=String(b.regNumber || defaults.regNumber).trim();
+    b.priorityDate=b.priorityDate || defaults.priorityDate;
+    if (db.prepare("SELECT id FROM objects WHERE type='contract' AND replace(reg_number,' ','')=?").get(b.regNumber.replace(/\s/g,'')))
+      return json(res,409,{error:'Этот номер договора уже занят. Откройте добавление заново или укажите другой номер.'});
+  }
   if (!String(b.name || '').trim()) return json(res, 400, { error: 'Заполните название' });
   if ((b.type === 'trademark' || b.type === 'patent') && !String(b.holder || '').trim())
     return json(res, 400, { error: 'Заполните правообладателя' });
@@ -212,6 +244,8 @@ route('PATCH', '/api/objects/:id', async (req, res, p) => {
   if (!row || row.deleted_at) return json(res, 404, { error: 'not found' });
   const b = await readBody(req);
   const changed = [];
+  if (row.type==='contract' && 'regNumber' in b && db.prepare("SELECT id FROM objects WHERE type='contract' AND replace(reg_number,' ','')=? AND id<>?").get(String(b.regNumber).replace(/\s/g,''),p.id))
+    return json(res,409,{error:'Этот номер договора уже занят'});
   const sets = [];
   const args = {};
   for (const [api, col] of Object.entries(EDITABLE)) {
@@ -260,6 +294,7 @@ route('POST', '/api/objects/:id/reminder', async (req, res, p) => {
   const row = getObj(p.id);
   if (!row || row.deleted_at) return json(res, 404, { error: 'not found' });
   const { date, time, note } = await readBody(req);
+  if(row.refused_at) return json(res,400,{error:'Сначала верните объект в основной реестр'});
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return json(res, 400, { error: 'Укажите дату' });
   const reminder = {
     date, time: time || '10:00', note: String(note || '').trim(),
@@ -297,7 +332,7 @@ route('DELETE', '/api/objects/:id/reminder', async (req, res, p) => {
 route('GET', '/api/reminders', async (req, res) => {
   const u = currentUser(req);
   if (!u) return json(res, 401, { error: 'auth' });
-  const rows = db.prepare("SELECT * FROM objects WHERE reminder IS NOT NULL AND deleted_at IS NULL").all();
+  const rows = db.prepare("SELECT * FROM objects WHERE reminder IS NOT NULL AND deleted_at IS NULL AND refused_at IS NULL").all();
   const items = rows.map(rowToApi).filter((o) => o.reminder && !o.reminder.acknowledged);
   items.sort((a, b) => (a.reminder.date + a.reminder.time).localeCompare(b.reminder.date + b.reminder.time));
   json(res, 200, { reminders: items });
@@ -354,7 +389,7 @@ route('GET', '/api/export', async (req, res, _p, url) => {
   if (!OBJECT_TYPES.includes(type)) return text(res, 400, 'type');
   const order = type === 'shipment' ? 'priority_date DESC, id DESC' : type === 'contract' ? 'holder, id' : 'holder, name';
   const kind = url.searchParams.get('kind');
-  let rows = db.prepare(`SELECT * FROM objects WHERE type = ? AND deleted_at IS NULL ORDER BY ${order}`).all(type).map(rowToApi);
+  let rows = db.prepare(`SELECT * FROM objects WHERE type = ? AND deleted_at IS NULL AND refused_at IS NULL ORDER BY ${order}`).all(type).map(rowToApi);
   if (type === 'contract' && kind) rows = rows.filter((r) => r.contractKind === kind);
   const COLS = {
     trademark: [['holder', 'Правообладатель'], ['appNumber', '№ заявки'], ['name', 'Название'], ['regNumber', '№ регистрации'], ['mktuClasses', 'Классы МКТУ'], ['priorityDate', 'Приоритет'], ['expiryDate', 'Действует до'], ['status', 'Статус'], ['responsible', 'Ответственный']],
@@ -666,7 +701,7 @@ const clientKey = (name) => String(name || '').trim().toLowerCase();
 
 route('GET', '/api/clients', async (req, res) => {
   const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
-  const rows = db.prepare("SELECT holder, type FROM objects WHERE deleted_at IS NULL AND trim(holder) != ''").all();
+  const rows = db.prepare("SELECT holder, type FROM objects WHERE deleted_at IS NULL AND refused_at IS NULL AND trim(holder) != ''").all();
   const byKey = new Map();
   for (const r of rows) {
     const key = clientKey(r.holder);
@@ -689,7 +724,7 @@ route('GET', '/api/clients/:key', async (req, res, p) => {
   const key = p.key;
   // SQLite's lower()/upper() only handle ASCII — фильтруем в JS, чтобы кириллица
   // сравнивалась регистронезависимо корректно.
-  const rows = db.prepare("SELECT * FROM objects WHERE deleted_at IS NULL AND trim(holder) != '' ORDER BY type, name")
+  const rows = db.prepare("SELECT * FROM objects WHERE deleted_at IS NULL AND refused_at IS NULL AND trim(holder) != '' ORDER BY type, name")
     .all().filter((r) => clientKey(r.holder) === key);
   if (!rows.length) {
     const c = db.prepare('SELECT * FROM clients WHERE key = ?').get(key);
@@ -796,9 +831,10 @@ route('GET', '/api/health', async (_req, res) => {
   try { tunnelUrl = (await readFile(join(process.env.ERFIS_DATA_DIR || __dirname, 'tunnel-url'), 'utf8')).trim() || null; } catch {}
   json(res, 200, {
     ok: true, version: VERSION, tunnelUrl,
-    trademarks: c("SELECT COUNT(*) c FROM objects WHERE type='trademark' AND deleted_at IS NULL"),
-    patents: c("SELECT COUNT(*) c FROM objects WHERE type='patent' AND deleted_at IS NULL"),
-    software: c("SELECT COUNT(*) c FROM objects WHERE type='software' AND deleted_at IS NULL"),
+    trademarks: c("SELECT COUNT(*) c FROM objects WHERE type='trademark' AND deleted_at IS NULL AND refused_at IS NULL"),
+    patents: c("SELECT COUNT(*) c FROM objects WHERE type='patent' AND deleted_at IS NULL AND refused_at IS NULL"),
+    software: c("SELECT COUNT(*) c FROM objects WHERE type='software' AND deleted_at IS NULL AND refused_at IS NULL"),
+    refused: c("SELECT COUNT(*) c FROM objects WHERE refused_at IS NOT NULL AND deleted_at IS NULL"),
     shipments: c("SELECT COUNT(*) c FROM objects WHERE type='shipment' AND deleted_at IS NULL"),
     contracts: c("SELECT COUNT(*) c FROM objects WHERE type='contract' AND deleted_at IS NULL"),
     price: c('SELECT COUNT(*) c FROM price_items'),
@@ -806,7 +842,7 @@ route('GET', '/api/health', async (_req, res) => {
     trips: c('SELECT COUNT(*) c FROM business_trips'),
     trash: c('SELECT COUNT(*) c FROM objects WHERE deleted_at IS NOT NULL'),
     activity: c('SELECT COUNT(*) c FROM activity'),
-    remindersDue: db.prepare("SELECT * FROM objects WHERE reminder IS NOT NULL AND deleted_at IS NULL").all()
+    remindersDue: db.prepare("SELECT * FROM objects WHERE reminder IS NOT NULL AND deleted_at IS NULL AND refused_at IS NULL").all()
       .map((r) => { try { return JSON.parse(r.reminder); } catch { return null; } })
       .filter((x) => x && !x.acknowledged && new Date(`${x.date}T${x.time || '00:00'}:00`).getTime() <= Date.now()).length,
     importedAt: db.prepare("SELECT v FROM meta WHERE k='imported_at'").get()?.v || null,

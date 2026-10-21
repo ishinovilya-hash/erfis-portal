@@ -141,6 +141,9 @@ if (!tableCols('users').includes('is_manager')) {
 if (!tableCols('objects').includes('extra')) {
   db.exec("ALTER TABLE objects ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'");
 }
+if (!tableCols('objects').includes('refused_at')) {
+  db.exec('ALTER TABLE objects ADD COLUMN refused_at TEXT');
+}
 if (!tableCols('users').includes('failed_attempts')) {
   db.exec('ALTER TABLE users ADD COLUMN failed_attempts INTEGER NOT NULL DEFAULT 0');
 }
