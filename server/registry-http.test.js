@@ -21,6 +21,7 @@ test('HTTP lifecycle, auth, duplicates and independent price import',async()=>{
   let ready=false;
   for(let n=0;n<40;n++){try{await request('/health');ready=true;break;}catch{await delay(100);}}
   assert.ok(ready,output);
+  const client=(await request('/clients','POST',{name:'Test',kind:'client'})).data.client;
   assert.equal((await request('/objects?type=refused','GET',undefined,'bad')).status,401);
   const p={format:'erfis-registry-update-v1',id:'http-price',refused:[],price:[{category:'A',name:'Test',fee:'10',duty:'20',total:'30',note:''}]};
   assert.equal((await request('/admin/registry-update','POST',p,'teststaff')).status,403);
@@ -29,7 +30,7 @@ test('HTTP lifecycle, auth, duplicates and independent price import',async()=>{
   assert.equal((await request('/admin/registry-update','POST',p)).status,200);
   assert.equal((await request('/price')).data.items.length,1);
   for(const type of ['trademark','patent','software']){
-   const created=await request('/objects','POST',{type,holder:'Test',name:'Test '+type,regNumber:'100'});
+   const created=await request('/objects','POST',{type,clientId:client.id,holder:'Test',name:'Test '+type,regNumber:'100'});
    assert.equal(created.status,200);const id=created.data.object.id;
    await request(`/objects/${id}/reminder`,'POST',{date:'2020-01-01',time:'10:00'});
    assert.equal((await request(`/objects/${id}/refused`,'POST',{refused:true})).status,200);
@@ -42,7 +43,7 @@ test('HTTP lifecycle, auth, duplicates and independent price import',async()=>{
    await request(`/objects/${id}/reminder`,'DELETE');
   }
   const d=(await request('/contracts/defaults?kind=individual')).data;
-  const b={type:'contract',contractKind:'individual',holder:'Test',name:'Услуги',...d};
+  const b={type:'contract',clientId:client.id,contractKind:'individual',holder:'Test',name:'Услуги',...d};
   assert.equal((await request('/objects','POST',b)).status,200);
   assert.equal((await request('/objects','POST',b)).status,409);
   assert.match((await request('/contracts/defaults?kind=individual')).data.regNumber,/^Ф2\//);

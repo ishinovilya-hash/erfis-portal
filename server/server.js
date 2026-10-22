@@ -15,6 +15,7 @@ import {
 } from './lib.js';
 import { buildSoprovod, soprovodFilename, soprovodAvailable } from './soprovod.js';
 import { contractDefaults, moveRefused, importRegistryUpdate } from './registry-update.js';
+import {initClients360, clientApi, saveClient, resolveObjectClient} from './clients360.js';
 
 const OBJECT_TYPES = ['trademark', 'patent', 'software', 'shipment', 'contract'];
 
@@ -38,6 +39,7 @@ if (created.length) {
 }
 const imp = importSeedIfEmpty();
 console.log('Импорт данных:', JSON.stringify(imp));
+initClients360(db);
 
 // ---------- auth ----------
 function currentUser(req) {
@@ -181,6 +183,7 @@ route('POST', '/api/objects', async (req, res) => {
   if (!u) return json(res, 401, { error: 'auth' });
   const b = await readBody(req);
   if (!OBJECT_TYPES.includes(b.type)) return json(res, 400, { error: 'type' });
+  try { resolveObjectClient(db,b); } catch(e) { return json(res,e.status||400,{error:e.message}); }
   if (b.type === 'contract') {
     const defaults=contractDefaults(db,b.contractKind || 'legal');
     b.regNumber=String(b.regNumber || defaults.regNumber).trim();
@@ -194,10 +197,10 @@ route('POST', '/api/objects', async (req, res) => {
   const id = `${TYPE_PREFIX[b.type]}-n${randomBytes(4).toString('hex')}`;
   const now = new Date().toISOString();
   const vals = { id, type: b.type, created_at: now, updated_at: now, extra: JSON.stringify(extraFrom(b)) };
-  for (const [api, col] of Object.entries(EDITABLE)) vals[col] = api === 'responsible' ? (b[api] || null) : String(b[api] ?? '').trim();
+  for (const [api, col] of Object.entries(EDITABLE)) vals[col] = ['responsible','clientId'].includes(api) ? (b[api] || null) : String(b[api] ?? '').trim();
   db.prepare(`INSERT INTO objects
-    (id,type,holder,name,app_number,reg_number,object_type,mktu_classes,priority_date,expiry_date,document_ref,document_url,responsible,notes,extra,created_at,updated_at)
-    VALUES (@id,@type,@holder,@name,@app_number,@reg_number,@object_type,@mktu_classes,@priority_date,@expiry_date,@document_ref,@document_url,@responsible,@notes,@extra,@created_at,@updated_at)`).run(vals);
+    (id,type,holder,name,app_number,reg_number,object_type,mktu_classes,priority_date,expiry_date,document_ref,document_url,responsible,notes,extra,created_at,updated_at,client_id)
+    VALUES (@id,@type,@holder,@name,@app_number,@reg_number,@object_type,@mktu_classes,@priority_date,@expiry_date,@document_ref,@document_url,@responsible,@notes,@extra,@created_at,@updated_at,@client_id)`).run(vals);
   logActivity('create', { id, type: b.type }, `Создан объект «${b.name}»`, u.id);
   json(res, 200, { object: rowToApi(getObj(id)) });
 });
@@ -244,13 +247,14 @@ route('PATCH', '/api/objects/:id', async (req, res, p) => {
   if (!row || row.deleted_at) return json(res, 404, { error: 'not found' });
   const b = await readBody(req);
   const changed = [];
+  try { resolveObjectClient(db,b,row); } catch(e) { return json(res,e.status||400,{error:e.message}); }
   if (row.type==='contract' && 'regNumber' in b && db.prepare("SELECT id FROM objects WHERE type='contract' AND replace(reg_number,' ','')=? AND id<>?").get(String(b.regNumber).replace(/\s/g,''),p.id))
     return json(res,409,{error:'Этот номер договора уже занят'});
   const sets = [];
   const args = {};
   for (const [api, col] of Object.entries(EDITABLE)) {
     if (!(api in b)) continue;
-    const next = api === 'responsible' ? (b[api] || null) : String(b[api] ?? '').trim();
+    const next = ['responsible','clientId'].includes(api) ? (b[api] || null) : String(b[api] ?? '').trim();
     if (String(row[col] ?? '') === String(next ?? '')) continue;
     sets.push(`${col} = @${col}`);
     args[col] = next;
@@ -697,60 +701,35 @@ route('DELETE', '/api/cases/:id', async (req, res, p) => {
 });
 
 // ---- 360° карточка клиента ----
-const clientKey = (name) => String(name || '').trim().toLowerCase();
-
-route('GET', '/api/clients', async (req, res) => {
-  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
-  const rows = db.prepare("SELECT holder, type FROM objects WHERE deleted_at IS NULL AND refused_at IS NULL AND trim(holder) != ''").all();
-  const byKey = new Map();
-  for (const r of rows) {
-    const key = clientKey(r.holder);
-    if (!byKey.has(key)) byKey.set(key, { key, name: r.holder, counts: {}, total: 0 });
-    const c = byKey.get(key);
-    c.counts[r.type] = (c.counts[r.type] || 0) + 1;
-    c.total += 1;
-  }
-  const sites = db.prepare('SELECT key, website FROM clients').all();
-  for (const s of sites) {
-    if (!byKey.has(s.key)) byKey.set(s.key, { key: s.key, name: s.key, counts: {}, total: 0 });
-    byKey.get(s.key).website = s.website || '';
-  }
-  const clients = [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-  json(res, 200, { clients });
+route('GET', '/api/clients', async (req,res) => {
+  if(!currentUser(req))return json(res,401,{error:'auth'});
+  const counts=db.prepare("SELECT client_id,type,count(*) AS n FROM objects WHERE deleted_at IS NULL AND refused_at IS NULL GROUP BY client_id,type").all();
+  const clients=db.prepare('SELECT * FROM counterparties').all().map(r=>{
+    const c=clientApi(r);c.counts={};
+    for(const x of counts)if(x.client_id===c.id)c.counts[x.type]=x.n;
+    c.total=Object.values(c.counts).reduce((a,b)=>a+b,0);return c;
+  }).sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+  json(res,200,{clients});
 });
-
-route('GET', '/api/clients/:key', async (req, res, p) => {
-  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
-  const key = p.key;
-  // SQLite's lower()/upper() only handle ASCII — фильтруем в JS, чтобы кириллица
-  // сравнивалась регистронезависимо корректно.
-  const rows = db.prepare("SELECT * FROM objects WHERE deleted_at IS NULL AND refused_at IS NULL AND trim(holder) != '' ORDER BY type, name")
-    .all().filter((r) => clientKey(r.holder) === key);
-  if (!rows.length) {
-    const c = db.prepare('SELECT * FROM clients WHERE key = ?').get(key);
-    if (!c) return json(res, 404, { error: 'not found' });
+route('GET', '/api/clients/:id', async (req,res,p) => {
+  if(!currentUser(req))return json(res,401,{error:'auth'});
+  const c=db.prepare('SELECT * FROM counterparties WHERE id=?').get(p.id);
+  if(!c)return json(res,404,{error:'Карточка не найдена'});
+  const objects={trademark:[],patent:[],software:[],contract:[],refused:[]};
+  for(const r of db.prepare('SELECT * FROM objects WHERE client_id=? AND deleted_at IS NULL ORDER BY holder,name').all(c.id)){
+    if(r.refused_at)objects.refused.push(rowToApi(r));else if(objects[r.type])objects[r.type].push(rowToApi(r));
   }
-  const objects = { trademark: [], patent: [], software: [], shipment: [], contract: [] };
-  let name = key;
-  for (const r of rows) { objects[r.type].push(rowToApi(r)); name = r.holder; }
-  const client = db.prepare('SELECT * FROM clients WHERE key = ?').get(key);
-  json(res, 200, { key, name: client?.name || name, website: client?.website || '', objects });
+  json(res,200,{...clientApi(c),objects});
 });
-
-route('PATCH', '/api/clients/:key', async (req, res, p) => {
-  const u = currentUser(req); if (!u) return json(res, 401, { error: 'auth' });
-  const key = p.key;
-  const b = await readBody(req);
-  const match = db.prepare("SELECT holder FROM objects WHERE deleted_at IS NULL AND trim(holder) != ''")
-    .all().find((r) => clientKey(r.holder) === key);
-  const name = String(b.name || match?.holder || key).trim();
-  const website = String(b.website ?? '').trim();
-  const now = new Date().toISOString();
-  db.prepare(`INSERT INTO clients (key,name,website,updated_at,updated_by) VALUES (?,?,?,?,?)
-    ON CONFLICT(key) DO UPDATE SET name=excluded.name, website=excluded.website, updated_at=excluded.updated_at, updated_by=excluded.updated_by`)
-    .run(key, name, website, now, u.id);
-  logActivity('client', null, `Обновлён сайт клиента «${name}»`, u.id);
-  json(res, 200, { key, name, website });
+route('POST', '/api/clients', async (req,res) => {
+  const u=currentUser(req);if(!u)return json(res,401,{error:'auth'});
+  try{json(res,200,{client:saveClient(db,await readBody(req),u.id)});}
+  catch(e){json(res,e.status||400,{error:e.message});}
+});
+route('PATCH', '/api/clients/:id', async (req,res,p) => {
+  const u=currentUser(req);if(!u)return json(res,401,{error:'auth'});
+  try{json(res,200,{client:saveClient(db,await readBody(req),u.id,p.id)});}
+  catch(e){json(res,e.status||400,{error:e.message});}
 });
 
 // ---- командировки ----

@@ -108,6 +108,7 @@ export function rowToApi(row) {
     id: row.id,
     type: row.type,
     holder: row.holder,
+    clientId: row.client_id || null,
     name: row.name,
     appNumber: row.app_number,
     regNumber: row.reg_number,
@@ -143,6 +144,7 @@ export function rowToApi(row) {
 
 // Editable columns: API name -> DB column
 export const EDITABLE = {
+  clientId: 'client_id',
   holder: 'holder',
   name: 'name',
   appNumber: 'app_number',

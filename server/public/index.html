@@ -446,6 +446,7 @@ td.holder{min-width:160px}
 
 <script src="/logo.js"></script>
 <script src="/qrcode.js"></script>
+<script src="/clients360.js?v=1"></script>
 <script>
 (function(){
   const paths = (window.ERFIS_LOGO || {emblem:[],word:[]});
@@ -572,7 +573,10 @@ async function loadRoute(){
     state.requisites = reqs.requisites; state.payments = list.payments;
   }
   else if(r==='price') state.price = (await api('/price')).items;
-  else if(r==='clients') state.clientsList = (await api('/clients')).clients;
+  else if(r==='clients') {
+    state.clientsList = (await api('/clients')).clients;
+    if(state.clientView && !state.clientForm)state.clientDetail=await api('/clients/'+encodeURIComponent(state.clientView));
+  }
   else if(r==='trips'){
     const m=state.tripMonth, first=new Date(m.getFullYear(),m.getMonth(),1), from=new Date(first);
     from.setDate(first.getDate()-((first.getDay()+6)%7));
@@ -830,19 +834,22 @@ function renderRegistry(){
 function openDetail(id){
   state.panel = {mode:'view', id, obj:null, activity:[], draft:null, busy:false};
   renderPanel();
-  api('/objects/'+id).then(d=>{
+  Promise.all([api('/objects/'+id),api('/clients')]).then(([d,c])=>{
     if(!state.panel || state.panel.id!==id) return;
+    state.clientOptions=c.clients;
     state.panel.obj = d.object; state.panel.activity = d.activity||[];
     renderPanel();
   }).catch(e=> toast(e.message, true));
 }
-async function openCreate(type){
+async function openCreate(type, client=null){
   let defaults={};
+  try { state.clientOptions=(await api('/clients')).clients; }catch(e){toast(e.message,true);return;}
   if(type==='contract'){
     try{defaults=await api('/contracts/defaults?kind='+state.contractKind);}catch(e){toast(e.message,true);return;}
   }
   state.panel = {mode:'create', id:null, type, draft:blankDraft(type), busy:false};
   Object.assign(state.panel.draft,defaults);
+  if(client)Object.assign(state.panel.draft,{clientId:client.id,holder:client.name});
   renderPanel();
 }
 function blankDraft(type){
@@ -853,7 +860,7 @@ function blankDraft(type){
   if(type==='contract') b.contractKind = state.contractKind || 'legal';
   return b;
 }
-const DRAFT_KEYS = ['holder','name','appNumber','regNumber','objectType','mktuClasses','priorityDate','expiryDate','documentRef','documentUrl','notes','intNo','contactPerson','email','registry','actWhen','contractKind','workDate','stage','act','executor'];
+const DRAFT_KEYS = ['clientId','holder','name','appNumber','regNumber','objectType','mktuClasses','priorityDate','expiryDate','documentRef','documentUrl','notes','intNo','contactPerson','email','registry','actWhen','contractKind','workDate','stage','act','executor'];
 function closePanel(){
   state.panel = null;
   $('#scrim').classList.remove('open');
@@ -923,6 +930,10 @@ function renderPanel(){
   const st = (ps.mode!=='create' && ps.obj && !REG[type].noStatus) ? ps.obj.status : null;
   const f = (label,key,opts={})=>{
     const v = src[key]||'';
+    if(key==='holder' && ['trademark','patent','software','contract'].includes(type)){
+      if(!editing)return `<div class="field"><label>${label}</label><div class="val">${src.clientId?`<button class="btn" id="open-client-card">${esc(v)} ↗</button>`:(esc(v)||'—')}</div></div>`;
+      return clientPickerMarkup(src,label);
+    }
     if(!editing) return `<div class="field"><label>${label}</label><div class="val ${opts.mono?'mono':''}">${opts.fmt?fmt(v):(esc(v)||'—')}</div></div>`;
     if(opts.type==='textarea') return `<div class="field"><label>${label}</label><textarea data-k="${key}">${esc(v)}</textarea></div>`;
     if(opts.type==='select') return `<div class="field"><label>${label}</label><select data-k="${key}">${opts.options.map(o=>`<option value="${o[0]}" ${v===o[0]?'selected':''}>${esc(o[1])}</option>`).join('')}</select></div>`;
@@ -1026,6 +1037,8 @@ function renderPanel(){
   if(q('#pcancel')) q('#pcancel').onclick = maybeDiscard;
   if(q('#psave')) q('#psave').onclick = savePanel;
   p.querySelectorAll('[data-k]').forEach(el=> el.oninput = ()=>{ ps.draft[el.dataset.k] = el.value; });
+  if(q('#client-holder-input'))bindClientPicker(p,ps);
+  if(q('#open-client-card'))q('#open-client-card').onclick=()=>{const id=src.clientId;closePanel();state.clientForm=null;state.clientView=id;state.clientDetail=null;go('clients');};
   if(ps.mode==='create' && type==='contract') q('[data-k="contractKind"]').onchange=async e=>{
     const kind=e.target.value;ps.draft.contractKind=kind;
     try{const d=await api('/contracts/defaults?kind='+kind);if(state.panel===ps && ps.draft.contractKind===kind){ps.draft.regNumber=d.regNumber;renderPanel();}}catch(err){toast(err.message,true);}
@@ -1055,6 +1068,11 @@ async function savePanel(){
   const ps = state.panel;
   const d = ps.draft;
   const type = ps.mode==='create' ? ps.type : ps.obj.type;
+  if(['trademark','patent','software','contract'].includes(type) && !d.clientId){toast('Выберите карточку в «Клиенты 360»',true);return;}
+  if(ps.mode!=='create' && ps.obj.clientId && d.clientId!==ps.obj.clientId){
+    if(!confirm(`Перенести запись от «${ps.obj.holder}» к «${d.holder}»? Правообладатель / контрагент записи изменится.`))return;
+    d.confirmRelink=true;
+  }
   if(!String(d.name||'').trim()){ toast('Заполните название', true); return; }
   if(REG[type].holderReq && !String(d.holder||'').trim()){ toast('Заполните правообладателя', true); return; }
   ps.busy = true; renderPanel();
@@ -1695,94 +1713,7 @@ function renderCases(){
   };
 }
 
-/* ---------- Клиенты 360° ---------- */
-const CLIENT_TYPE_LABELS = {trademark:'Товарные знаки', patent:'Патенты', software:'Программы для ЭВМ', shipment:'Отправления', contract:'Договоры'};
-const CLIENT_TYPE_ORDER = ['trademark','patent','software','shipment','contract'];
-
-async function loadClientDetail(key){
-  state.clientView = key;
-  state.clientDetail = null;
-  renderClients();
-  try{ state.clientDetail = await api('/clients/'+encodeURIComponent(key)); renderClients(); }
-  catch(e){ toast(e.message,true); state.clientView=null; renderClients(); }
-}
-
-function clientObjRow(o, type){
-  const bits = [];
-  if(o.regNumber) bits.push('№'+o.regNumber);
-  if(type==='contract' && o.priorityDate) bits.push('от '+fmt(o.priorityDate));
-  if(o.expiryDate) bits.push('до '+fmt(o.expiryDate));
-  const st = o.status;
-  return `<div class="lrow" data-clientobj="${o.id}" style="cursor:pointer">
-    <div class="lr-main"><div class="lr-t">${esc(o.name||'—')}</div><div class="lr-s mono">${esc(bits.join(' · ')||'—')}</div></div>
-    ${st && st.key!=='none' ? `<span style="font-size:12px;color:var(--${st.key==='active'?'ok':st.key==='expired'?'crit':'warn'})">${esc(st.label)}</span>`:''}
-  </div>`;
-}
-
-function renderClients(){
-  if(state.clientView){
-    const d = state.clientDetail;
-    if(!d){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
-    const sections = CLIENT_TYPE_ORDER.filter(t=> d.objects[t] && d.objects[t].length);
-    $('#view').innerHTML = `
-      <button class="btn" id="client-back" style="margin-bottom:14px">← Все клиенты</button>
-      <h2 style="margin:0 0 4px">${esc(d.name)}</h2>
-      <div class="hint" style="margin-bottom:16px">Всего объектов: ${sections.reduce((s,t)=>s+d.objects[t].length,0)}</div>
-      <div class="listcard" style="padding:18px;margin-bottom:16px">
-        <div class="field" style="padding:0"><label>Сайт клиента</label>
-          <div style="display:flex;gap:8px">
-            <input id="client-site" type="url" value="${esc(d.website)}" placeholder="https://..." style="flex:1"/>
-            <button class="btn primary" id="client-site-save">Сохранить</button>
-          </div>
-          <div class="hint" style="margin-top:6px">Для анализа на допродажи — пришлите ссылку и название клиента в чат.</div>
-        </div>
-      </div>
-      ${sections.length ? sections.map(t=>`
-        <h3 class="price-cat">${CLIENT_TYPE_LABELS[t]} (${d.objects[t].length})</h3>
-        <div class="listcard" style="margin-bottom:16px">${d.objects[t].map(o=>clientObjRow(o,t)).join('')}</div>
-      `).join('') : `<div class="hint">Объектов не найдено.</div>`}`;
-
-    $('#view #client-back').onclick = ()=>{ state.clientView=null; state.clientDetail=null; renderClients(); };
-    $('#view #client-site-save').onclick = async ()=>{
-      const website = $('#view #client-site').value.trim();
-      try{
-        await api('/clients/'+encodeURIComponent(d.key),{method:'PATCH', body:jbody({name:d.name, website})});
-        toast('Сохранено');
-        const cached = state.clientsList && state.clientsList.find(c=>c.key===d.key);
-        if(cached) cached.website = website; // чтобы список тоже был актуален при возврате назад
-        await loadClientDetail(d.key);
-      }catch(e){ toast(e.message,true); }
-    };
-    document.querySelectorAll('#view [data-clientobj]').forEach(el=> el.onclick = ()=> openDetail(el.dataset.clientobj));
-    return;
-  }
-
-  const list = state.clientsList;
-  if(!list){ $('#view').innerHTML='<div class="pageloader">Загрузка…</div>'; return; }
-  if(state.clientsQ==null) state.clientsQ = '';
-  const q = state.clientsQ.trim().toLowerCase();
-  const filtered = q ? list.filter(c=> c.name.toLowerCase().includes(q)) : list;
-
-  $('#view').innerHTML = `
-    <div class="demoline">
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21a8 8 0 0 1 16 0"/></svg>
-      <span style="flex:1;min-width:0">Все объекты клиента в одном месте — товарные знаки, патенты, договоры. Хорошая точка, чтобы увидеть пробелы в защите и предложить допродажу.</span>
-    </div>
-    <input id="clients-search" value="${esc(state.clientsQ)}" placeholder="Поиск клиента по названию…" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--hairline);background:var(--surface);margin-bottom:14px"/>
-    ${filtered.length ? `<div class="listcard">${filtered.map(c=>`
-      <div class="lrow" data-client="${esc(c.key)}" style="cursor:pointer">
-        <div class="lr-main"><div class="lr-t">${esc(c.name)}</div>
-          <div class="lr-s">${CLIENT_TYPE_ORDER.filter(t=>c.counts[t]).map(t=>`${CLIENT_TYPE_LABELS[t]}: ${c.counts[t]}`).join(' · ')||'—'}${c.website?` · <a href="${esc(c.website)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${esc(c.website)}</a>`:''}</div></div>
-        <div class="when">${c.total} объект(ов)</div>
-      </div>`).join('')}</div>` : `<div class="hint">Ничего не найдено.</div>`}`;
-
-  $('#view #clients-search').oninput = e=>{
-    const pos = e.target.selectionStart;
-    state.clientsQ = e.target.value; renderClients();
-    const el = $('#view #clients-search'); if(el){ el.focus(); el.setSelectionRange(pos,pos); }
-  };
-  document.querySelectorAll('#view [data-client]').forEach(el=> el.onclick = ()=> loadClientDetail(el.dataset.client));
-}
+/* Clients 360 rendering is in clients360.js. */
 
 function renderTrash(){
   const t = state.trash;
@@ -1964,7 +1895,7 @@ document.addEventListener('keydown', e=>{
 setInterval(()=>{
   if($('#app').hidden) return;
   if(state.panel && state.panel.mode!=='view') return;
-  if(state.route==='clients' && state.clientView) return; // не сбрасывать несохранённый URL сайта
+  if(state.route==='clients' && (state.clientView || state.clientForm)) return;
   refresh().catch(()=>{});
 }, 30000);
 
