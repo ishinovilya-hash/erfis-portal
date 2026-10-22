@@ -642,17 +642,18 @@ const REG = {
   },
   trademark: {
     label:'Товарный знак', add:'Добавить товарный знак', title1:'Название объекта', holderReq:true,
-    cols:[FLAG_COL, {key:'name',label:'Название объекта',cls:'name'}, {key:'holder',label:'Правообладатель',cls:'holder'},
+    cols:[FLAG_COL, {key:'holder',label:'Правообладатель',cls:'holder'}, {key:'name',label:'Название объекта',cls:'name'},
+      {key:'appNumber',label:'№ заявки',cls:'mono num'},
       {key:'regNumber',label:'№ регистрации',cls:'mono num'}, {key:'mktuClasses',label:'Классы МКТУ',cls:'mono'},
       {key:'priorityDate',label:'Приоритет',cls:'mono num'}, {key:'expiryDate',label:'Действует до',cls:'mono num'},
-      {key:'_status',label:'Статус'}, RESP_COL],
+      {key:'_status',label:'Статус'}],
   },
   patent: {
     label:'Патент', add:'Добавить патент', title1:'Название объекта', holderReq:true,
-    cols:[FLAG_COL, {key:'name',label:'Название объекта',cls:'name'}, {key:'objectType',label:'Вид'},
-      {key:'holder',label:'Правообладатель',cls:'holder'}, {key:'regNumber',label:'№ патента',cls:'mono num'},
+    cols:[FLAG_COL, {key:'holder',label:'Правообладатель',cls:'holder'}, {key:'name',label:'Название объекта',cls:'name'},
+      {key:'objectType',label:'Вид'}, {key:'appNumber',label:'№ заявки',cls:'mono num'}, {key:'regNumber',label:'№ патента',cls:'mono num'},
       {key:'priorityDate',label:'Приоритет',cls:'mono num'}, {key:'expiryDate',label:'Действует до',cls:'mono num'},
-      {key:'_status',label:'Статус'}, RESP_COL],
+      {key:'_status',label:'Статус'}],
   },
   software: {
     label:'Программа для ЭВМ', add:'Добавить программу', title1:'Название программы', noStatus:true,
