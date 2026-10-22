@@ -533,14 +533,13 @@ const ROUTES = {
   patents:{title:'Реестр патентов', crumb:'Реестр объектов', type:'patent'},
   software:{title:'Программы для ЭВМ', crumb:'Реестр объектов', type:'software'},
   refused:{title:'Реестр отказных объектов', crumb:'Реестр объектов', type:'refused'},
-  shipments:{title:'Реестр отправлений', crumb:'Реестр объектов', type:'shipment'},
-  contracts:{title:'Учёт договоров контрагентов', crumb:'Реестр объектов', type:'contract'},
+  shipments:{title:'Реестр отправлений', crumb:'Администрация', type:'shipment'},
+  contracts:{title:'Учёт договоров контрагентов', crumb:'Администрация', type:'contract'},
   reminders:{title:'Напоминания о продлении', crumb:'Контроль сроков'},
   payments:{title:'QR для оплаты пошлин', crumb:'Инструменты'},
   messages:{title:'Формирование сообщений', crumb:'Инструменты'},
   price:{title:'Прайс ЭРФИС', crumb:'Инструменты'},
-  cases:{title:'Библиотека кейсов', crumb:'Инструменты'},
-  clients:{title:'Клиенты 360°', crumb:'Инструменты'},
+  clients:{title:'Клиенты 360°', crumb:'Администрация'},
   trips:{title:'Командировки', crumb:'Команда'},
   trash:{title:'Корзина', crumb:'Служебное'},
   log:{title:'Журнал изменений', crumb:'Служебное'},
@@ -573,7 +572,6 @@ async function loadRoute(){
     state.requisites = reqs.requisites; state.payments = list.payments;
   }
   else if(r==='price') state.price = (await api('/price')).items;
-  else if(r==='cases') state.cases = (await api('/cases')).cases;
   else if(r==='clients') state.clientsList = (await api('/clients')).clients;
   else if(r==='trips'){
     const m=state.tripMonth, first=new Date(m.getFullYear(),m.getMonth(),1), from=new Date(first);
@@ -600,9 +598,11 @@ function renderNav(){
     {r:'trademarks', label:'Товарные знаки', count:h.trademarks, ic:'M4 7h16M4 12h16M4 17h10'},
     {r:'patents', label:'Патенты', count:h.patents, ic:'M12 3l8 4-8 4-8-4 8-4Zm-8 9 8 4 8-4M4 16l8 4 8-4'},
     {r:'software', label:'Программы для ЭВМ', count:h.software, ic:'M4 5h16v11H4zM2 20h20M9 16v4M15 16v4'},
+    {r:'refused', label:'Отказные объекты', count:h.refused, ic:'M4 4h16v16H4zM8 8l8 8M8 16l8-8'},
+    {sec:'Администрация'},
     {r:'shipments', label:'Реестр отправлений', count:h.shipments, ic:'M3 8l9-5 9 5-9 5-9-5zM3 8v8l9 5 9-5V8M12 13v8'},
     {r:'contracts', label:'Договоры контрагентов', count:h.contracts, ic:'M7 3h7l5 5v13H7zM14 3v5h5M9 13h6M9 17h6'},
-    {r:'refused', label:'Отказные объекты', count:h.refused, ic:'M4 4h16v16H4zM8 8l8 8M8 16l8-8'},
+    {r:'clients', label:'Клиенты 360°', ic:'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21a8 8 0 0 1 16 0'},
     {sec:'Команда'},
     {r:'trips', label:'Командировки', count:h.trips||null, ic:'M3 7h18v12H3zM8 7V5h8v2M3 12h18M9 12v2M15 12v2'},
     {sec:'Контроль сроков'},
@@ -611,8 +611,6 @@ function renderNav(){
     {r:'payments', label:'QR оплаты пошлин', ic:'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h3v3h-3zM19 14h1M19 19h1M17 19h0'},
     {r:'messages', label:'Формирование сообщений', ic:'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'},
     {r:'price', label:'Прайс ЭРФИС', count:h.price||null, ic:'M7 7h.01M3 5a2 2 0 0 1 2-2h6l10 10-8 8L3 11z'},
-    {r:'cases', label:'Библиотека кейсов', count:h.cases||null, ic:'M4 7h16v12H4zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'},
-    {r:'clients', label:'Клиенты 360°', ic:'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21a8 8 0 0 1 16 0'},
     {sec:'Служебное'},
     {r:'trash', label:'Корзина', count:h.trash||null, ic:'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13'},
     {r:'log', label:'Журнал изменений', ic:'M8 6h11M8 12h11M8 18h11M3.5 6h.01M3.5 12h.01M3.5 18h.01'},
@@ -1857,7 +1855,6 @@ function renderAll(){
   else if(state.route==='payments') renderPayments();
   else if(state.route==='messages') renderMessages();
   else if(state.route==='price') renderPrice();
-  else if(state.route==='cases') renderCases();
   else if(state.route==='clients') renderClients();
   else if(state.route==='trips') renderTrips();
   else if(state.route==='trash') renderTrash();
