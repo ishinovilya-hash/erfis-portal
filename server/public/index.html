@@ -720,7 +720,14 @@ function renderPowersOfAttorney(){
   let rows=items.filter(x=>!q||[x.number,x.principal,x.issueDate,x.validUntil,x.poaType,x.note].some(v=>String(v||'').toLocaleLowerCase('ru').includes(q)));
   const {key,dir}=state.poaSort;
   const sortValue=(k,v)=>{const s=String(v||'');return ['issueDate','validUntil'].includes(k)&&/^\d{2}\.\d{2}\.\d{4}$/.test(s)?`${s.slice(6)}-${s.slice(3,5)}-${s.slice(0,2)}`:s;};
-  rows.sort((a,b)=>sortValue(key,a[key]).localeCompare(sortValue(key,b[key]),'ru',{numeric:true,sensitivity:'base'})*dir);
+  rows.sort((a,b)=>{
+    if(key==='number'){
+      const pa=String(a.number||'').match(/^\s*(\d+)\s*\/\s*(\d{4})\s*$/);
+      const pb=String(b.number||'').match(/^\s*(\d+)\s*\/\s*(\d{4})\s*$/);
+      if(pa&&pb){const byYear=Number(pa[2])-Number(pb[2]);return (byYear||Number(pa[1])-Number(pb[1]))*dir;}
+    }
+    return sortValue(key,a[key]).localeCompare(sortValue(key,b[key]),'ru',{numeric:true,sensitivity:'base'})*dir;
+  });
   const columns=[['number','№'],['principal','Доверитель'],['issueDate','Дата выдачи'],['validUntil','Срок до'],['poaType','Тип'],['note','Примечание']];
   $('#view').innerHTML=`
     <div class="toolbar">
