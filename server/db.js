@@ -131,6 +131,19 @@ CREATE TABLE IF NOT EXISTS business_trips (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_business_trips_dates ON business_trips(start_date, end_date);
+CREATE TABLE IF NOT EXISTS powers_of_attorney (
+  id TEXT PRIMARY KEY,
+  source_key TEXT UNIQUE,
+  number TEXT NOT NULL,
+  principal TEXT NOT NULL DEFAULT '',
+  issue_date TEXT NOT NULL DEFAULT '',
+  valid_until TEXT NOT NULL DEFAULT '',
+  poa_type TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_powers_of_attorney_number ON powers_of_attorney(number);
 `);
 
 // --- миграции для существующих баз ---

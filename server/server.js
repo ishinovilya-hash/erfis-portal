@@ -803,6 +803,94 @@ route('DELETE', '/api/trips/:id', async (req, res, p) => {
   json(res, 200, { ok: true });
 });
 
+// ---- реестр доверенностей ----
+const powerAttorneyApi = (r) => ({
+  id: r.id, sourceKey: r.source_key, number: r.number, principal: r.principal,
+  issueDate: r.issue_date, validUntil: r.valid_until, poaType: r.poa_type,
+  note: r.note, createdAt: r.created_at, updatedAt: r.updated_at,
+});
+const powerAttorneyFields = {
+  number: 'number', principal: 'principal', issueDate: 'issue_date',
+  validUntil: 'valid_until', poaType: 'poa_type', note: 'note',
+};
+route('GET', '/api/powers-of-attorney', async (req, res) => {
+  if (!currentUser(req)) return json(res, 401, { error: 'auth' });
+  const rows = db.prepare('SELECT * FROM powers_of_attorney ORDER BY number COLLATE NOCASE').all();
+  json(res, 200, { items: rows.map(powerAttorneyApi) });
+});
+route('POST', '/api/powers-of-attorney/import', async (req, res) => {
+  const u = currentUser(req);
+  if (!u) return json(res, 401, { error: 'auth' });
+  if (!isManager(u)) return json(res, 403, { error: 'Импортировать реестр может только руководитель' });
+  if (db.prepare("SELECT 1 FROM meta WHERE k='power_attorney_imported_at'").get())
+    return json(res, 409, { error: 'Исходная таблица уже загружена' });
+  if (db.prepare('SELECT 1 FROM powers_of_attorney LIMIT 1').get())
+    return json(res, 409, { error: 'В реестре уже есть записи. Очистка не выполнялась' });
+  const { items } = await readBody(req, 2_000_000);
+  if (!Array.isArray(items) || !items.length) return json(res, 400, { error: 'Файл не содержит записей' });
+  if (items.some(x => !String(x.number || '').trim() || !String(x.sourceKey || '').trim()))
+    return json(res, 400, { error: 'В импортируемых строках должны быть номер и ключ исходной строки' });
+  const now = new Date().toISOString();
+  const ins = db.prepare(`INSERT INTO powers_of_attorney
+    (id,source_key,number,principal,issue_date,valid_until,poa_type,note,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?)`);
+  db.exec('BEGIN');
+  try {
+    for (const x of items) {
+      ins.run(`poa-${randomBytes(8).toString('hex')}`, String(x.sourceKey).trim(), String(x.number).trim(),
+        String(x.principal || '').trim(), String(x.issueDate || '').trim(), String(x.validUntil || '').trim(),
+        String(x.poaType || '').trim(), String(x.note || '').trim(), now, now);
+    }
+    db.prepare("INSERT INTO meta (k,v) VALUES ('power_attorney_imported_at',?)").run(now);
+    db.prepare('INSERT INTO activity (at,kind,object_id,object_type,text,user_id) VALUES (?,?,?,?,?,?)')
+      .run(now, 'import', null, 'power_of_attorney', `Импорт реестра доверенностей — ${items.length} записей`, u.id);
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); return json(res, 400, { error: e.message }); }
+  json(res, 200, { imported: items.length });
+});
+route('POST', '/api/powers-of-attorney', async (req, res) => {
+  const u = currentUser(req);
+  if (!u) return json(res, 401, { error: 'auth' });
+  const b = await readBody(req);
+  if (!String(b.number || '').trim()) return json(res, 400, { error: 'Укажите номер доверенности' });
+  const id = `poa-${randomBytes(8).toString('hex')}`, now = new Date().toISOString();
+  db.prepare(`INSERT INTO powers_of_attorney
+    (id,number,principal,issue_date,valid_until,poa_type,note,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?)`).run(id, String(b.number).trim(), String(b.principal || '').trim(),
+    String(b.issueDate || '').trim(), String(b.validUntil || '').trim(), String(b.poaType || '').trim(),
+    String(b.note || '').trim(), now, now);
+  logActivity('power_of_attorney', null, `Создана доверенность № ${String(b.number).trim()}`, u.id);
+  json(res, 200, { item: powerAttorneyApi(db.prepare('SELECT * FROM powers_of_attorney WHERE id=?').get(id)) });
+});
+route('PATCH', '/api/powers-of-attorney/:id', async (req, res, p) => {
+  const u = currentUser(req);
+  if (!u) return json(res, 401, { error: 'auth' });
+  const row = db.prepare('SELECT * FROM powers_of_attorney WHERE id=?').get(p.id);
+  if (!row) return json(res, 404, { error: 'Доверенность не найдена' });
+  const b = await readBody(req);
+  const sets = [], vals = [];
+  for (const [key, col] of Object.entries(powerAttorneyFields)) {
+    if (!(key in b)) continue;
+    const value = String(b[key] || '').trim();
+    if (key === 'number' && !value) return json(res, 400, { error: 'Укажите номер доверенности' });
+    if (value !== row[col]) { sets.push(`${col}=?`); vals.push(value); }
+  }
+  if (!sets.length) return json(res, 200, { item: powerAttorneyApi(row), unchanged: true });
+  const now = new Date().toISOString();
+  db.prepare(`UPDATE powers_of_attorney SET ${sets.join(',')}, updated_at=? WHERE id=?`).run(...vals, now, p.id);
+  logActivity('power_of_attorney', null, `Изменена доверенность № ${String(b.number || row.number).trim()}`, u.id);
+  json(res, 200, { item: powerAttorneyApi(db.prepare('SELECT * FROM powers_of_attorney WHERE id=?').get(p.id)) });
+});
+route('DELETE', '/api/powers-of-attorney/:id', async (req, res, p) => {
+  const u = currentUser(req);
+  if (!u) return json(res, 401, { error: 'auth' });
+  const row = db.prepare('SELECT number FROM powers_of_attorney WHERE id=?').get(p.id);
+  if (!row) return json(res, 404, { error: 'Доверенность не найдена' });
+  db.prepare('DELETE FROM powers_of_attorney WHERE id=?').run(p.id);
+  logActivity('power_of_attorney', null, `Удалена доверенность № ${row.number}`, u.id);
+  json(res, 200, { ok: true });
+});
+
 // ---- health / admin ----
 route('GET', '/api/health', async (_req, res) => {
   const c = (q) => db.prepare(q).get().c;
@@ -816,6 +904,7 @@ route('GET', '/api/health', async (_req, res) => {
     refused: c("SELECT COUNT(*) c FROM objects WHERE refused_at IS NOT NULL AND deleted_at IS NULL"),
     shipments: c("SELECT COUNT(*) c FROM objects WHERE type='shipment' AND deleted_at IS NULL"),
     contracts: c("SELECT COUNT(*) c FROM objects WHERE type='contract' AND deleted_at IS NULL"),
+    powersOfAttorney: c('SELECT COUNT(*) c FROM powers_of_attorney'),
     price: c('SELECT COUNT(*) c FROM price_items'),
     cases: c('SELECT COUNT(*) c FROM cases'),
     trips: c('SELECT COUNT(*) c FROM business_trips'),

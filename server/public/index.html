@@ -481,6 +481,7 @@ const state = {
   objects:{trademark:null, patent:null, software:null, shipment:null, contract:null},
   reminders:null, trash:null, activity:null, price:null, priceEdit:null, contractKind:'legal',
   trips:null, tripForm:null, tripMonth:new Date(new Date().getFullYear(),new Date().getMonth(),1),
+  powersOfAttorney:null, poaSort:{key:'number',dir:1},
   ui:{sort:{key:'holder',dir:1}, status:'', resp:'', flag:'', q:''},
   panel:null,
   bellOpen:false,
@@ -536,6 +537,7 @@ const ROUTES = {
   refused:{title:'Реестр отказных объектов', crumb:'Реестр объектов', type:'refused'},
   shipments:{title:'Реестр отправлений', crumb:'Администрация', type:'shipment'},
   contracts:{title:'Учёт договоров контрагентов', crumb:'Администрация', type:'contract'},
+  powers:{title:'Реестр доверенностей', crumb:'Администрация'},
   reminders:{title:'Напоминания о продлении', crumb:'Контроль сроков'},
   payments:{title:'QR для оплаты пошлин', crumb:'Инструменты'},
   messages:{title:'Формирование сообщений', crumb:'Инструменты'},
@@ -577,6 +579,7 @@ async function loadRoute(){
     state.clientsList = (await api('/clients')).clients;
     if(state.clientView && !state.clientForm)state.clientDetail=await api('/clients/'+encodeURIComponent(state.clientView));
   }
+  else if(r==='powers') state.powersOfAttorney = (await api('/powers-of-attorney')).items;
   else if(r==='trips'){
     const m=state.tripMonth, first=new Date(m.getFullYear(),m.getMonth(),1), from=new Date(first);
     from.setDate(first.getDate()-((first.getDay()+6)%7));
@@ -607,6 +610,7 @@ function renderNav(){
     {r:'shipments', label:'Реестр отправлений', count:h.shipments, ic:'M3 8l9-5 9 5-9 5-9-5zM3 8v8l9 5 9-5V8M12 13v8'},
     {r:'contracts', label:'Договоры контрагентов', count:h.contracts, ic:'M7 3h7l5 5v13H7zM14 3v5h5M9 13h6M9 17h6'},
     {r:'clients', label:'Клиенты 360°', ic:'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21a8 8 0 0 1 16 0'},
+    {r:'powers', label:'Реестр доверенностей', count:h.powersOfAttorney, ic:'M7 3h10v18H7zM10 8h4M10 12h4M10 16h4'},
     {sec:'Команда'},
     {r:'trips', label:'Командировки', count:h.trips||null, ic:'M3 7h18v12H3zM8 7V5h8v2M3 12h18M9 12v2M15 12v2'},
     {sec:'Контроль сроков'},
@@ -707,6 +711,77 @@ function applyView(list){
     return String(x).localeCompare(String(y), 'ru', {numeric:true, sensitivity:'base'}) * dir;
   });
   return rows;
+}
+
+function renderPowersOfAttorney(){
+  const items=state.powersOfAttorney;
+  if(!items){$('#view').innerHTML='<div class="pageloader">Загрузка…</div>';return;}
+  const q=state.ui.q.trim().toLocaleLowerCase('ru');
+  let rows=items.filter(x=>!q||[x.number,x.principal,x.issueDate,x.validUntil,x.poaType,x.note].some(v=>String(v||'').toLocaleLowerCase('ru').includes(q)));
+  const {key,dir}=state.poaSort;
+  const sortValue=(k,v)=>{const s=String(v||'');return ['issueDate','validUntil'].includes(k)&&/^\d{2}\.\d{2}\.\d{4}$/.test(s)?`${s.slice(6)}-${s.slice(3,5)}-${s.slice(0,2)}`:s;};
+  rows.sort((a,b)=>sortValue(key,a[key]).localeCompare(sortValue(key,b[key]),'ru',{numeric:true,sensitivity:'base'})*dir);
+  const columns=[['number','№'],['principal','Доверитель'],['issueDate','Дата выдачи'],['validUntil','Срок до'],['poaType','Тип'],['note','Примечание']];
+  $('#view').innerHTML=`
+    <div class="toolbar">
+      <span class="count-note">${rows.length} из ${items.length}</span><span class="spacer"></span>
+      <button class="btn primary" id="poa-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Добавить доверенность</button>
+      ${!items.length&&state.me?.isManager?'<button class="btn" id="poa-import">Загрузить данные из таблицы</button><input id="poa-file" type="file" accept=".json,application/json" hidden>':''}
+    </div>
+    ${!items.length?'<div class="empty"><h3>Реестр пока пуст</h3>Загрузите подготовленный файл со строками из Excel.</div>':''}
+    <div class="tablewrap"><table><thead><tr>${columns.map(([k,l])=>`<th class="sortable" data-poa-sort="${k}">${l}${key===k?` <span class="arw">${dir>0?'▲':'▼'}</span>`:''}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(x=>`<tr data-poa-id="${esc(x.id)}">${columns.map(([k])=>`<td class="${['number','issueDate','validUntil'].includes(k)?'mono num':''}">${esc(k==='issueDate'||k==='validUntil'?fmt(x[k]):x[k]||'—')}</td>`).join('')}</tr>`).join('')||(!items.length?'':`<tr><td colspan="6"><div class="empty"><h3>Ничего не найдено</h3>Измените запрос.</div></td></tr>`)}</tbody></table></div>`;
+  $('#poa-add').onclick=()=>openPowerAttorney();
+  document.querySelectorAll('[data-poa-sort]').forEach(th=>th.onclick=()=>{
+    const k=th.dataset.poaSort;state.poaSort=key===k?{key:k,dir:-dir}:{key:k,dir:1};renderPowersOfAttorney();
+  });
+  document.querySelectorAll('tr[data-poa-id]').forEach(tr=>tr.onclick=()=>openPowerAttorney(items.find(x=>x.id===tr.dataset.poaId)));
+  if($('#poa-import')){
+    $('#poa-import').onclick=()=>$('#poa-file').click();
+    $('#poa-file').onchange=async e=>{
+      const file=e.target.files[0];if(!file)return;
+      try{
+        const payload=JSON.parse(await file.text());
+        if(!Array.isArray(payload.items))throw new Error('В файле нет списка доверенностей');
+        if(!confirm(`Загрузить ${payload.items.length} строк из исходной таблицы?`))return;
+        const result=await api('/powers-of-attorney/import',{method:'POST',body:JSON.stringify(payload)});
+        await refresh();toast(`Загружено доверенностей: ${result.imported}`);
+      }catch(err){toast(err.message,true);}
+      finally{e.target.value='';}
+    };
+  }
+}
+
+function openPowerAttorney(item=null){
+  state.panel={kind:'power-attorney',mode:item?'view':'create',item:item?{...item}:null,
+    draft:item?{...item}:{number:'',principal:'',issueDate:'',validUntil:'',poaType:'',note:''}};
+  renderPanel();
+}
+function renderPowerAttorneyPanel(){
+  const p=$('#panel'),sc=$('#scrim'),ps=state.panel,editing=ps.mode!=='view',src=editing?ps.draft:ps.item;
+  sc.classList.add('open');p.classList.add('open');p.setAttribute('aria-hidden','false');sc.onclick=()=>editing?maybeDiscard():closePanel();
+  const fields=[['Номер доверенности','number','text'],['Доверитель','principal','text'],['Дата выдачи','issueDate','text'],['Срок до','validUntil','text'],['Тип','poaType','text'],['Примечание','note','textarea']];
+  const field=([label,key,type])=>`<div class="field"><label>${label}</label>${editing?(type==='textarea'?`<textarea data-poa-key="${key}">${esc(src[key]||'')}</textarea>`:`<input data-poa-key="${key}" type="${type}" value="${esc(src[key]||'')}" ${['issueDate','validUntil'].includes(key)?'placeholder="ДД.ММ.ГГГГ или ГГГГ-ММ-ДД"':''}/>`):`<div class="val ${['number','issueDate','validUntil'].includes(key)?'mono':''}">${esc(key==='issueDate'||key==='validUntil'?fmt(src[key]):src[key]||'—')}</div>`}</div>`;
+  p.innerHTML=`<header><div><div class="eyebrow">Реестр доверенностей</div><h2>${esc(src.number||'Новая доверенность')}</h2></div><button class="close" id="poa-close" aria-label="Закрыть">✕</button></header>
+    <div class="body">${fields.map(field).join('')}</div><div class="actions">${editing?`<button class="btn primary" id="poa-save">${ps.mode==='create'?'Добавить':'Сохранить'}</button><button class="btn" id="poa-cancel">Отмена</button>`:`<button class="btn primary" id="poa-edit">Редактировать</button><button class="btn danger" id="poa-delete">Удалить</button><span class="spacer"></span><button class="btn" id="poa-cancel">Закрыть</button>`}</div>`;
+  p.querySelector('#poa-close').onclick=()=>editing?maybeDiscard():closePanel();
+  if(p.querySelector('#poa-cancel'))p.querySelector('#poa-cancel').onclick=()=>editing?maybeDiscard():closePanel();
+  if(p.querySelector('#poa-edit'))p.querySelector('#poa-edit').onclick=()=>{ps.mode='edit';ps.draft={...ps.item};renderPanel();};
+  if(p.querySelector('#poa-save'))p.querySelector('#poa-save').onclick=async()=>{
+    const body=Object.fromEntries([...p.querySelectorAll('[data-poa-key]')].map(el=>[el.dataset.poaKey,el.value]));
+    if(!body.number.trim()){toast('Укажите номер доверенности',true);return;}
+    try{
+      const result=ps.mode==='create'
+        ? await api('/powers-of-attorney',{method:'POST',body:jbody(body)})
+        : await api('/powers-of-attorney/'+encodeURIComponent(ps.item.id),{method:'PATCH',body:jbody(body)});
+      ps.item=result.item;ps.mode='view';ps.draft=null;
+      await refresh();renderPanel();toast('Доверенность сохранена');
+    }catch(e){toast(e.message,true);}
+  };
+  if(p.querySelector('#poa-delete'))p.querySelector('#poa-delete').onclick=async()=>{
+    if(!confirm(`Удалить доверенность № ${ps.item.number}?`))return;
+    try{await api('/powers-of-attorney/'+encodeURIComponent(ps.item.id),{method:'DELETE'});closePanel();await refresh();toast('Доверенность удалена');}catch(e){toast(e.message,true);}
+  };
 }
 
 function rowHtml(it, cols){
@@ -914,6 +989,7 @@ function panelBody(type, f){
 }
 
 function renderPanel(){
+  if(state.panel?.kind==='power-attorney') return renderPowerAttorneyPanel();
   const p=$('#panel'), sc=$('#scrim');
   const ps = state.panel;
   if(!ps){ closePanel(); return; }
@@ -1787,6 +1863,7 @@ function renderAll(){
   else if(state.route==='messages') renderMessages();
   else if(state.route==='price') renderPrice();
   else if(state.route==='clients') renderClients();
+  else if(state.route==='powers') renderPowersOfAttorney();
   else if(state.route==='trips') renderTrips();
   else if(state.route==='trash') renderTrash();
   else if(state.route==='log') renderLog();
@@ -1878,6 +1955,7 @@ document.addEventListener('click', e=>{
 $('#search').addEventListener('input', e=>{
   state.ui.q = e.target.value;
   if(ROUTES[state.route] && ROUTES[state.route].type) renderRegistry();
+  else if(state.route==='powers') renderPowersOfAttorney();
 });
 $('#menutoggle').onclick = ()=> $('#side').classList.toggle('open');
 $('#nav').addEventListener('click', e=>{
