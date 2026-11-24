@@ -115,6 +115,7 @@ function renderClients(){
       <h2>${esc(d.name)}</h2><div class="hint" style="margin:8px 0 18px">ОПФ: ${esc(d.opf||'не указана')} · ИНН: ${esc(d.inn||'не указан')}</div>
       ${d.website?`<div class="field"><label>Сайт</label><div class="val">${esc(d.website)}</div></div>`:''}
       <h3>Контактная информация</h3><div class="listcard" style="margin-bottom:20px">${d.contacts.length?d.contacts.map(c=>`<div class="lrow"><div class="lr-main"><div>${esc(c.name||'Контакт')}</div><div class="lr-s">Email: ${esc(c.email||'—')} · Телефон: ${esc(c.phone||'—')} · Telegram: ${esc(c.telegram||'—')}</div></div></div>`).join(''):'<div class="empty">Контакты пока не добавлены</div>'}</div>
+      <h3>Сделки CRM</h3><div class="listcard" style="margin-bottom:20px">${(d.deals||[]).length?d.deals.map(deal=>`<div class="lrow"><div class="lr-main"><button class="btn" data-client-deal="${esc(deal.id)}">${esc(deal.title)}</button><div class="lr-s">${esc(({new:'Новый лид',offer:'Выставлено КП',contract:'Заключение договора / счёт',work:'В работе',act_ready:'Можно делать акт',act_sent:'Акт отправлен',won:'Сделан акт',lost:'Отказ'})[deal.stage]||deal.stage)} · ${Number(deal.budget||0).toLocaleString('ru-RU')} ₽</div></div></div>`).join(''):'<div class="empty">Сделок пока нет</div>'}</div>
       <h3>Договоры</h3>${clientTable('contract',d.objects.contract)}<button class="btn" data-client-create="contract" style="margin:12px 0">Добавить договор</button>
       <h3>Объекты</h3><div class="toolbar">${['trademark','patent','software'].map(t=>`<button class="btn" data-client-create="${t}">${REG[t].add}</button>`).join('')}<button class="btn" id="client-link">Привязать существующий</button></div>
       ${state.clientLink?renderClientLink(d):''}<div class="hint">Двойной щелчок по объекту — открыть карточку. Номера можно копировать кнопкой ⧉.</div>
@@ -123,6 +124,7 @@ function renderClients(){
       <h3 class="price-cat">Технические задания</h3><div class="listcard"><div class="empty">Технических заданий пока нет</div></div>`;
     $('#client-back').onclick=()=>{state.clientView=null;state.clientDetail=null;state.clientLink=null;renderClients();};
     $('#client-edit').onclick=()=>editClient(d);
+    document.querySelectorAll('[data-client-deal]').forEach(b=>b.onclick=()=>openCrmDealById(b.dataset.clientDeal));
     $('#client-link').onclick=()=>beginClientLink(d);
     document.querySelectorAll('[data-client-create]').forEach(b=>b.onclick=()=>{
       if(b.dataset.clientCreate==='contract')state.contractKind=d.opf==='физ. лицо'?'individual':'legal';

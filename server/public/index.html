@@ -446,7 +446,9 @@ td.holder{min-width:160px}
 
 <script src="/logo.js"></script>
 <script src="/qrcode.js"></script>
-<script src="/clients360.js?v=1"></script>
+<link rel="stylesheet" href="/crm.css?v=1">
+<script src="/clients360.js?v=2"></script>
+<script src="/crm.js?v=1"></script>
 <script>
 (function(){
   const paths = (window.ERFIS_LOGO || {emblem:[],word:[]});
@@ -531,6 +533,7 @@ function firstName(n){ return (n||'').split(' ')[0]; }
 
 /* ---------- routing ---------- */
 const ROUTES = {
+  crm:{title:'CRM · сделки', crumb:'Продажи'},
   trademarks:{title:'Реестр товарных знаков', crumb:'Реестр объектов', type:'trademark'},
   patents:{title:'Реестр патентов', crumb:'Реестр объектов', type:'patent'},
   software:{title:'Программы для ЭВМ', crumb:'Реестр объектов', type:'software'},
@@ -548,6 +551,7 @@ const ROUTES = {
   log:{title:'Журнал изменений', crumb:'Служебное'},
 };
 function go(r){
+  if(crmBusy()) return;
   if(!ROUTES[r]) r='trademarks';
   state.route = r;
   state.ui.sort = {key:'holder',dir:1};
@@ -580,6 +584,7 @@ async function loadRoute(){
     if(state.clientView && !state.clientForm)state.clientDetail=await api('/clients/'+encodeURIComponent(state.clientView));
   }
   else if(r==='powers') state.powersOfAttorney = (await api('/powers-of-attorney')).items;
+  else if(r==='crm') await loadCrm();
   else if(r==='trips'){
     const m=state.tripMonth, first=new Date(m.getFullYear(),m.getMonth(),1), from=new Date(first);
     from.setDate(first.getDate()-((first.getDay()+6)%7));
@@ -601,6 +606,8 @@ function renderNav(){
   const h = state.health || {};
   const dueTotal = (h.remindersDue!=null) ? h.remindersDue : (state.reminders? state.reminders.filter(x=>reminderDue(x.reminder)).length : null);
   const items = [
+    {sec:'Продажи'},
+    {r:'crm', label:'CRM · сделки', ic:'M3 3v18h18M7 15V9M12 15V6M17 15v-4'},
     {sec:'Реестр объектов'},
     {r:'trademarks', label:'Товарные знаки', count:h.trademarks, ic:'M4 7h16M4 12h16M4 17h10'},
     {r:'patents', label:'Патенты', count:h.patents, ic:'M12 3l8 4-8 4-8-4 8-4Zm-8 9 8 4 8-4M4 16l8 4 8-4'},
@@ -623,7 +630,6 @@ function renderNav(){
     {r:'trash', label:'Корзина', count:h.trash||null, ic:'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13'},
     {r:'log', label:'Журнал изменений', ic:'M8 6h11M8 12h11M8 18h11M3.5 6h.01M3.5 12h.01M3.5 18h.01'},
     {sec:'Скоро'},
-    {label:'CRM · сделки', soon:true, ic:'M3 3v18h18'},
     {label:'Договоры', soon:true, ic:'M7 3h7l5 5v13H7z'},
     {label:'Документы (PDF)', soon:true, ic:'M7 3h7l5 5v13H7z'},
   ];
@@ -1870,6 +1876,7 @@ function renderAll(){
   else if(state.route==='messages') renderMessages();
   else if(state.route==='price') renderPrice();
   else if(state.route==='clients') renderClients();
+  else if(state.route==='crm') renderCrm();
   else if(state.route==='powers') renderPowersOfAttorney();
   else if(state.route==='trips') renderTrips();
   else if(state.route==='trash') renderTrash();
@@ -1963,6 +1970,7 @@ $('#search').addEventListener('input', e=>{
   state.ui.q = e.target.value;
   if(ROUTES[state.route] && ROUTES[state.route].type) renderRegistry();
   else if(state.route==='powers') renderPowersOfAttorney();
+  else if(state.route==='crm' && !crmBusy()) renderCrm();
 });
 $('#menutoggle').onclick = ()=> $('#side').classList.toggle('open');
 $('#nav').addEventListener('click', e=>{
@@ -1979,6 +1987,7 @@ document.addEventListener('keydown', e=>{
 // периодическое обновление (мультипользовательский режим)
 setInterval(()=>{
   if($('#app').hidden) return;
+  if(crmBusy()) return;
   if(state.panel && state.panel.mode!=='view') return;
   if(state.route==='clients' && (state.clientView || state.clientForm)) return;
   refresh().catch(()=>{});

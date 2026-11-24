@@ -16,6 +16,7 @@ import {
 import { buildSoprovod, soprovodFilename, soprovodAvailable } from './soprovod.js';
 import { contractDefaults, moveRefused, importRegistryUpdate } from './registry-update.js';
 import {initClients360, clientApi, saveClient, resolveObjectClient} from './clients360.js';
+import {initCrm, registerCrmRoutes} from './crm.js';
 
 const OBJECT_TYPES = ['trademark', 'patent', 'software', 'shipment', 'contract'];
 
@@ -40,6 +41,7 @@ if (created.length) {
 const imp = importSeedIfEmpty();
 console.log('Импорт данных:', JSON.stringify(imp));
 initClients360(db);
+initCrm(db);
 
 // ---------- auth ----------
 function currentUser(req) {
@@ -80,6 +82,8 @@ const route = (method, pattern, handler) => {
   );
   routes.push({ method, rx, keys, handler });
 };
+
+registerCrmRoutes({route, db, json, readBody, currentUser, logActivity});
 
 // ---- session ----
 const MAX_LOGIN_ATTEMPTS = 3;
@@ -719,7 +723,8 @@ route('GET', '/api/clients/:id', async (req,res,p) => {
   for(const r of db.prepare('SELECT * FROM objects WHERE client_id=? AND deleted_at IS NULL ORDER BY holder,name').all(c.id)){
     if(r.refused_at)objects.refused.push(rowToApi(r));else if(objects[r.type])objects[r.type].push(rowToApi(r));
   }
-  json(res,200,{...clientApi(c),objects});
+  const deals=db.prepare('SELECT id,title,stage,budget FROM crm_deals WHERE client_id=? AND deleted_at IS NULL ORDER BY updated_at DESC').all(c.id);
+  json(res,200,{...clientApi(c),objects,deals});
 });
 route('POST', '/api/clients', async (req,res) => {
   const u=currentUser(req);if(!u)return json(res,401,{error:'auth'});
