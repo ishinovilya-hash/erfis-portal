@@ -1,5 +1,6 @@
 const CRM_DIRECTIONS=[['patents','Изобретения и полезные модели'],['trademarks','Товарные знаки'],['mincifry','Минцифры'],['software','Программы для ЭВМ']];
 /* CRM uses the portal session, clients and existing employee directory. */
+const CRM_SERVICE_SUGGESTIONS=['Регистрация товарного знака','Поиск товарного знака','Продление товарного знака','Регистрация изобретения','Регистрация полезной модели','Патентный поиск','Регистрация промышленного образца','Регистрация программы для ЭВМ','Включение ПО в реестр Минцифры','Лицензионный договор','Отчуждение исключительного права'];
 const CRM_LABELS={new:'Новый лид',offer:'Выставлено КП',contract:'Заключение договора / счёт',work:'В работе',act_ready:'Можно делать акт',act_sent:'Акт отправлен',won:'Сделан акт',lost:'Отказ'};
 const crm={deals:null,clients:[],trash:[],mode:'active',responsible:'',upsell:false,drag:null,busy:false};
 const crmMoney=n=>Number(n||0).toLocaleString('ru-RU',{maximumFractionDigits:2})+' ₽';
@@ -29,7 +30,7 @@ function crmReport(){
 function crmCard(d,trash=false){
   const tasks=(d.tasks||[]).filter(t=>t.status==='open');
   const overdue=tasks.some(t=>t.due_at&&new Date(t.due_at)<new Date());
-  return `<article class="crm-card" ${trash?'':'draggable="true"'} data-deal="${esc(d.id)}">
+  return `<article class="crm-card" tabindex="0" aria-label="${esc(d.title)} — открыть двойным кликом или Enter" ${trash?'':'draggable="true"'} data-deal="${esc(d.id)}">
     <div class="crm-company" title="${esc(crmClient(d.client_id)?.name||'Клиент')}">${esc(crmClient(d.client_id)?.name||'Клиент')}</div>
     ${d.created_at?`<div class="crm-card-date" title="Дата создания сделки">${esc(new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow'}).format(new Date(d.created_at)))}</div>`:''}
     <button class="crm-card-title" title="${esc(d.title)}" data-open-deal="${esc(d.id)}">${esc(d.title)}</button>
@@ -60,7 +61,14 @@ function renderCrm(){
   $('#crm-upsells').onchange=e=>{crm.upsell=e.target.checked;renderCrm();};
   $('#crm-add').onclick=()=>crmEdit();
   $('#crm-report').onclick=crmReport;
-  document.querySelectorAll('[data-open-deal]').forEach(b=>b.onclick=()=>crmEdit([...crm.deals,...crm.trash].find(d=>d.id===b.dataset.openDeal)));
+  const openDeal=id=>crmEdit([...crm.deals,...crm.trash].find(d=>d.id===id));
+  document.querySelectorAll('[data-open-deal]').forEach(b=>{
+    if(!b.closest('.crm-card'))b.onclick=()=>openDeal(b.dataset.openDeal);
+  });
+  document.querySelectorAll('.crm-card[data-deal]').forEach(card=>{
+    card.ondblclick=e=>{if(e.target.closest('[data-restore-deal]'))return;openDeal(card.dataset.deal);};
+    card.onkeydown=e=>{if(e.key==='Enter'&&!e.target.closest('[data-restore-deal]')){e.preventDefault();openDeal(card.dataset.deal);}};
+  });
   document.querySelectorAll('[data-restore-deal]').forEach(b=>b.onclick=()=>crmMutation('/crm/deals/'+b.dataset.restoreDeal+'/restore','POST',{revision:crm.trash.find(d=>d.id===b.dataset.restoreDeal).revision}));
   document.querySelectorAll('[data-task-done]').forEach(b=>b.onclick=()=>crmCompleteTask(b.dataset.taskDeal,b.dataset.taskDone));
   if($('#crm-empty'))$('#crm-empty').onclick=()=>{if(confirm(`Безвозвратно удалить ${crm.trash.length} сделок из корзины вместе с их задачами и примечаниями?`))crmMutation('/crm/trash','DELETE',{deals:crm.trash.map(({id,revision})=>({id,revision}))});};
@@ -128,7 +136,7 @@ function crmEdit(original){
     <label class="crm-field">Клиент 360<input name="client_name" list="crm-client-list" value="${esc(crmClient(d.client_id)?.name||'')}" required autocomplete="off"><datalist id="crm-client-list">${crm.clients.map(c=>`<option value="${esc(c.name)}"></option>`).join('')}</datalist></label>
     ${crmSelect('Этап','stage',d.stage,Object.entries(CRM_LABELS))}${crmSelect('Ответственный','responsible_id',d.responsible_id||'',crmUsers(),true)}
     ${crmField('Стоимость работ, ₽','budget',d.budget,'number',true)}${crmField('Пошлины, ₽','duties',d.duties||0,'number')}
-    ${crmField('Оплачено за работы, ₽ · пусто = неизвестно','paid',d.paid??'','number')}${crmField('Услуга','service',d.service)}
+    ${crmField('Оплачено за работы, ₽ · пусто = неизвестно','paid',d.paid??'','number')}<label class="crm-field">Услуга<input name="service" list="crm-service-list" value="${esc(d.service||'')}" placeholder="Выберите или введите своё название" autocomplete="off"><datalist id="crm-service-list">${[...new Set([...CRM_SERVICE_SUGGESTIONS,...crm.deals.map(x=>x.service).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'ru')).map(name=>`<option value="${esc(name)}"></option>`).join('')}</datalist></label>
     ${crmSelect('Направление услуги','direction',d.direction||'',[['','— Не указано'],...CRM_DIRECTIONS])}${crmField('Дата первой передачи в работу','work_started_on',d.work_started_on||'','date')}<p class="hint">Дата заполняется при первом переводе в работу. Для старых сделок укажите её вручную.</p>${crmField('Источник','source',d.source)}${crmField('Теги через запятую','tags',(d.tags||[]).join(', '))}
     ${crmSelect('Исполнитель','executor_id',d.executor_id||'',crmUsers())}${crmField('Дата окончания','deadline',d.deadline?.slice(0,10),'date')}
     </div><h3>Контакт</h3><div class="crm-form-grid">${[['name','Имя'],['email','Email'],['phone','Телефон'],['telegram','Telegram'],['position','Должность']].map(([k,l])=>crmField(l,'contact_'+k,contact[k]||'',k==='email'?'email':'text')).join('')}</div>

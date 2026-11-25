@@ -172,7 +172,7 @@ input:not([type="checkbox"]):not([type="radio"]),select,textarea{accent-color:va
 @media(max-width:1199px){.crm-board{grid-auto-columns:200px;overflow-x:auto;height:auto;min-height:0}}
 
 /* Compact deal cards: company, date, linked title, owner, budget. */
-.crm-card{padding:9px 10px;border-radius:6px;box-shadow:none;font-size:13px;font-weight:400;line-height:1.4}
+.crm-card{padding:4px 10px;border-radius:6px;box-shadow:none;font-size:13px;font-weight:400;line-height:1.4}
 .crm-card-title,.crm-company,.crm-card-owner{display:block;width:100%;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;overflow-wrap:normal}
 .crm-company{margin:0;color:var(--ink-3);font-size:13px;line-height:1.4}
 .crm-card-date,.crm-card-owner{color:var(--ink);font-size:13px;font-weight:400;line-height:1.4;margin:0}
