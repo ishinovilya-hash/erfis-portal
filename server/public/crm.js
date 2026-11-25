@@ -20,11 +20,11 @@ function crmCard(d,trash=false){
   const tasks=(d.tasks||[]).filter(t=>t.status==='open');
   const overdue=tasks.some(t=>t.due_at&&new Date(t.due_at)<new Date());
   return `<article class="crm-card" ${trash?'':'draggable="true"'} data-deal="${esc(d.id)}">
-    <button class="crm-card-title" data-open-deal="${esc(d.id)}">${esc(d.title)}</button>
-    <div class="crm-company">${esc(crmClient(d.client_id)?.name||'Клиент')}</div>
-    <div class="crm-card-money">${crmMoney(d.budget)}</div>
-    <div class="crm-card-meta">${esc(userName(d.responsible_id)||'Без ответственного')}</div>
-    ${d.paid===null?'<div class="crm-card-meta">Оплата не указана</div>':`<div class="crm-card-meta">Оплачено: ${crmMoney(d.paid)} · Остаток: ${crmMoney(Math.max(0,d.budget-d.paid))}</div>`}
+    <div class="crm-company" title="${esc(crmClient(d.client_id)?.name||'Клиент')}">${esc(crmClient(d.client_id)?.name||'Клиент')}</div>
+    ${d.created_at?`<div class="crm-card-date" title="Дата создания сделки">${esc(new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow'}).format(new Date(d.created_at)))}</div>`:''}
+    <button class="crm-card-title" title="${esc(d.title)}" data-open-deal="${esc(d.id)}">${esc(d.title)}</button>
+    <div class="crm-card-owner" title="${esc(userName(d.responsible_id)||'Без ответственного')}">${esc(userName(d.responsible_id)||'Без ответственного')}</div>
+    <div class="crm-card-money" title="${d.paid===null?'Оплата не указана':esc(`Оплачено: ${crmMoney(d.paid)} · Остаток: ${crmMoney(Math.max(0,d.budget-d.paid))}`)}">${crmMoney(d.budget)}</div>
     ${tasks.length?`<div class="crm-task-marker ${overdue?'overdue':''}">${overdue?'Просрочено · ':''}Задач: ${tasks.length}</div>`:''}
     ${d.tags?.length?`<div class="crm-tags">${d.tags.map(t=>`<span>${esc(t)}</span>`).join('')}</div>`:''}
     ${trash?`<button class="btn" data-restore-deal="${esc(d.id)}">Восстановить</button>`:''}</article>`;
