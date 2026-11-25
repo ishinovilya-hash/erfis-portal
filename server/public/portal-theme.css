@@ -222,3 +222,22 @@ input:not([type="checkbox"]):not([type="radio"]),select,textarea{accent-color:va
 @media(max-width:880px){.crm-drop-actions{left:50%;width:calc(100vw - 28px);gap:8px}.crm-drop-actions>div{font-size:14px;padding:12px;min-height:70px}}
 
 .crm-card.crm-deadline-alert{border:2px solid var(--crit);padding:3px 9px}.crm-deadline-label{color:var(--crit);font-size:10px;line-height:1.3;margin-top:4px}.crm-card.crm-deadline-alert:hover{border-color:var(--crit)}
+
+/* Deal editor: fields left, notes and tasks right; actions stay at the top. */
+.crm-deal-dialog{width:min(1180px,calc(100vw - 32px));max-height:94vh}
+.crm-deal-dialog .crm-dialog-content{padding:0 22px 22px}
+.crm-deal-dialog .crm-editor-actions{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:8px;margin:0 -22px 0;padding:12px 22px;background:var(--surface);border-bottom:1px solid var(--hairline-2)}
+.crm-deal-dialog .crm-editor-actions .btn{font-size:12px;padding:7px 10px}
+.crm-deal-layout{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.25fr);gap:24px}
+.crm-deal-fields{min-width:0;padding-top:18px;border-right:1px solid var(--hairline-2);padding-right:24px}
+.crm-deal-fields .crm-form-grid{grid-template-columns:1fr;gap:0}
+.crm-deal-fields .crm-field{margin-bottom:12px;font-size:11px;gap:5px}
+.crm-deal-fields .crm-field input,.crm-deal-fields .crm-field select{min-height:36px;padding:8px 10px;font-size:13px}
+.crm-deal-fields h3{margin-top:18px}
+.crm-deal-activity{min-width:0;padding-top:18px}
+.crm-deal-activity>h3:first-child{margin-top:0}
+.crm-deal-activity .crm-notes{max-height:none;overflow:visible}
+.crm-deal-activity textarea{min-height:110px}
+.crm-deal-activity .crm-task-line .crm-card-title{white-space:normal;overflow-wrap:anywhere}
+.crm-deal-dialog footer{position:sticky;bottom:0;z-index:3;padding:12px 22px}
+@media(max-width:700px){.crm-deal-layout{grid-template-columns:1fr;gap:16px}.crm-deal-fields{border-right:0;padding-right:0;border-bottom:1px solid var(--hairline-2)}.crm-deal-dialog .crm-dialog-content{padding:0 14px 14px}.crm-deal-dialog .crm-editor-actions{margin:0 -14px;padding:10px 14px}.crm-deal-dialog .crm-editor-actions .btn{flex:1 1 auto}.crm-deal-activity{padding-top:0}}
