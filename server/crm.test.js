@@ -202,3 +202,15 @@ test('payment starts work atomically, computes working days and never resets fir
  assert.equal((await call('GET','/api/crm/mail')).status,403);
  assert.equal((await call('POST','/api/crm/mail',{from:'client@erfis.ru',password:'test'})).status,403);
 });
+
+test('planned work days save before payment and feed the paid deadline without starting work early',async t=>{
+ const {db,call,create,patch}=fixture(t);let d=await create({work_days:10,budget:100});
+ assert.equal(d.work_days,10);assert.equal(d.paid_on,'');assert.equal(d.work_started_on,'');assert.equal(d.deadline,'');
+ assert.equal(db.prepare('SELECT count(*) n FROM crm_work_register').get().n,0);
+ for(const work_days of [-1,1.5,501,'10'])assert.equal((await patch(d,{work_days})).status,400);
+ d=(await patch(d,{work_days:5})).data.deal;assert.equal(d.deadline,'');
+ let r=await call('POST','/api/crm/deals/:id/payment',{revision:d.revision,paid_on:'2026-11-20',paid:100,work_days:d.work_days,responsible_id:'u1',executor_id:'u1'},d.id);
+ assert.equal(r.status,200);d=r.data.deal;assert.equal(d.deadline,'2026-11-27');
+ assert.equal((await patch(d,{work_days:0})).status,400);
+ d=(await patch(d,{work_days:6})).data.deal;assert.equal(d.deadline,'2026-11-30');assert.equal(d.work_started_on,'2026-11-20');
+});

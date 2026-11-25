@@ -112,7 +112,7 @@ function values(db,b,old) {
   if(d.paid_on&&(!/^\d{4}-\d{2}-\d{2}$/.test(d.paid_on)||d.paid_on>moscowDay()))fail('Неверная дата оплаты');
   if(!Number.isInteger(d.work_days)||d.work_days<0||d.work_days>500)fail('Срок: от 1 до 500 рабочих дней');
   if(old?.paid_on&&d.paid_on!==old.paid_on)fail('Дата запуска по оплате уже сохранена. Для изменения срока используйте дату окончания');
-  if(d.work_days&&!d.paid_on)fail('Укажите дату оплаты');
+  if(old?.paid_on&&old.work_days&&!d.work_days)fail('Укажите срок выполнения: работа уже запущена по оплате');
   if(d.paid_on&&d.work_days&&(!old?.paid_on||old.work_days!==d.work_days))d.deadline=addWorkdays(d.paid_on,d.work_days);
 
   if(!CRM_DIRECTIONS.includes(d.direction))fail('Неверное направление услуги');

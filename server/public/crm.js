@@ -140,6 +140,7 @@ function crmEdit(original){
     ${crmField('Стоимость работ, ₽','budget',d.budget,'number',true)}
     ${crmField('Оплачено за работы, ₽ · пусто = неизвестно','paid',d.paid??'','number')}
     ${crmSelect('Направление услуги','direction',d.direction||'',[['','— Не указано'],...CRM_DIRECTIONS])}${crmField('Дата первой передачи в работу','work_started_on',d.work_started_on||'','date')}<p class="hint">Дата заполняется при первом переводе в работу. Для старых сделок укажите её вручную.</p>${crmField('Источник','source',d.source)}
+    ${crmField('Срок выполнения, рабочих дней','work_days',d.work_days||'','number')}<p class="hint">${d.paid_on?'Изменение срока пересчитает дату сдачи от сохранённой даты оплаты.':'Согласованный срок. Дата сдачи рассчитается после отметки оплаты.'}</p>
     ${d.paid_on?`<p class="hint">Запуск по оплате: ${esc(d.paid_on.split('-').reverse().join('.'))} · ${d.work_days} рабочих дней</p>`:''}${crmField('Дата окончания','deadline',d.deadline?.slice(0,10),'date')}
     </div><h3>Контакт</h3><div class="crm-form-grid">${[['name','Имя'],['email','Email'],['phone','Телефон'],['telegram','Telegram'],['position','Должность']].map(([k,l])=>crmField(l,'contact_'+k,contact[k]||'',k==='email'?'email':'text')).join('')}</div>
     ${contact.company?`<p class="hint">Компания контакта в amoCRM: ${esc(contact.company)}</p>`:''}
@@ -147,13 +148,14 @@ function crmEdit(original){
     ${d.id?`<h3>Задачи</h3>${(d.tasks||[]).map(t=>`<div class="crm-task-line"><div><button type="button" class="crm-card-title" data-edit-task="${esc(t.id)}">${esc(t.title)}</button><div class="hint">${esc(userName(t.assigned_to)||'Без ответственного')} · ${esc(crmDT(t.due_at))} МСК · ${t.status==='done'?'Выполнено':'Не выполнено'}</div></div>${t.status==='open'?`<button class="btn" type="button" data-edit-complete="${esc(t.id)}">Выполнено</button>`:''}</div>`).join('')||'<p class="hint">Задач пока нет</p>'}`:'<h3>Задачи</h3><p class="hint">Задачи можно добавить после создания сделки.</p>'}</section></div>`;
   const el=crmDialog(d.id?'Карточка сделки':'Новая сделка',body,async f=>{
     const client=crm.clients.find(c=>c.name===f.client_name.trim());if(!client)throw Error('Выберите существующего клиента из списка. Нового клиента сначала создайте в «Клиенты 360».');
-    const patch={title:f.title,client_id:client.id,responsible_id:f.responsible_id,stage:f.stage,budget:Number(f.budget),paid:f.paid===''?null:Number(f.paid),direction:f.direction,work_started_on:f.work_started_on,source:f.source,executor_id:f.responsible_id||null,deadline:f.deadline,contact:{...contact,...Object.fromEntries(['name','email','phone','telegram','position'].map(k=>[k,f['contact_'+k]]))}};
+    const patch={title:f.title,client_id:client.id,responsible_id:f.responsible_id,stage:f.stage,budget:Number(f.budget),paid:f.paid===''?null:Number(f.paid),direction:f.direction,work_days:f.work_days===''?0:Number(f.work_days),work_started_on:f.work_started_on,source:f.source,executor_id:f.responsible_id||null,deadline:f.deadline,contact:{...contact,...Object.fromEntries(['name','email','phone','telegram','position'].map(k=>[k,f['contact_'+k]]))}};
     if(d.id)patch.revision=d.revision;
     if(d.parent_deal_id)patch.parent_deal_id=d.parent_deal_id;
     if(f.new_note.trim())patch.notes=[...(d.notes||[]),f.new_note.trim()];
     return crmWorkflow(d,patch);
   });
   el.classList.add('crm-deal-dialog');
+  const workDaysInput=el.querySelector('[name=work_days]');workDaysInput.min=1;workDaysInput.max=500;workDaysInput.step=1;workDaysInput.required=!!d.paid_on;
   if(!d.id){el.querySelector('[name="client_name"]').onchange=e=>{const c=crm.clients.find(x=>x.name===e.target.value);const t=c?.contacts?.[0];if(t)for(const k of ['name','email','phone','telegram']){const input=el.querySelector(`[name="contact_${k}"]`);if(!input.value)input.value=t[k]||'';}};}
   if(d.id){
     if($('#crm-payment'))$('#crm-payment').onclick=()=>{if(confirm('Перейти к отметке оплаты? Несохранённые изменения карточки не сохранятся.'))crmPayment(d);};
@@ -179,13 +181,13 @@ async function openCrmDealById(id){
 
 function crmPayment(d){
  const today=new Date(Date.now()+10800000).toISOString().slice(0,10);
- const body=crmField('Дата оплаты','paid_on',today,'date',true)+crmField('Всего оплачено за работы, ₽','paid',d.paid??d.budget,'number',true)+crmField('Срок выполнения · рабочие дни','work_days','','number',true)+crmSelect('Ответственный · получатель письма','responsible_id',d.responsible_id||state.me.id,crmUsers(),true)+'<label class="crm-check"><input type="checkbox" name="allow_advance">Начать работу по полученному авансу</label><p class="hint">Отсчёт со следующего рабочего дня после оплаты, с учётом праздников РФ. За 3 рабочих дня до сдачи — красная рамка и письмо ответственному.</p><p id="crm-payment-preview" class="hint"></p>';
+ const body=crmField('Дата оплаты','paid_on',today,'date',true)+crmField('Всего оплачено за работы, ₽','paid',d.paid??d.budget,'number',true)+crmField('Срок выполнения · рабочие дни','work_days',d.work_days||'','number',true)+crmSelect('Ответственный · получатель письма','responsible_id',d.responsible_id||state.me.id,crmUsers(),true)+'<label class="crm-check"><input type="checkbox" name="allow_advance">Начать работу по полученному авансу</label><p class="hint">Отсчёт со следующего рабочего дня после оплаты, с учётом праздников РФ. За 3 рабочих дня до сдачи — красная рамка и письмо ответственному.</p><p id="crm-payment-preview" class="hint"></p>';
  const el=crmDialog('Оплата получена',body,async f=>{
    crm.busy=true;try{await api('/crm/deals/'+d.id+'/payment',{method:'POST',body:jbody({revision:d.revision,paid_on:f.paid_on,work_days:Number(f.work_days),paid:Number(f.paid),allow_advance:f.allow_advance==='on',executor_id:f.responsible_id,responsible_id:f.responsible_id})});crmClose();await loadCrm();renderCrm();toast('Оплата отмечена, срок рассчитан');}finally{crm.busy=false;}
  },'Подтвердить и начать работу');
  const days=el.querySelector('[name=work_days]');days.min=1;days.max=500;days.step=1;el.querySelector('[name=paid_on]').max=today;
  let version=0;const preview=async()=>{const request=++version;const date=el.querySelector('[name=paid_on]').value;if(!days.value||!date)return;try{const result=await api('/crm/deadline?date='+encodeURIComponent(date)+'&days='+encodeURIComponent(days.value));if(request===version)el.querySelector('#crm-payment-preview').textContent='Дата сдачи: '+result.deadline.split('-').reverse().join('.');}catch(e){if(request===version)el.querySelector('#crm-payment-preview').textContent=e.message;}};
- days.oninput=preview;el.querySelector('[name=paid_on]').onchange=preview;
+ days.oninput=preview;el.querySelector('[name=paid_on]').onchange=preview;void preview();
 }
 async function crmMailSettings(){
  try{const status=await api('/crm/mail');crmDialog('Почтовые напоминания',`<p class="hint">${status.configured?'Настройки сохранены. Новый пароль заменит сохранённый.':'Отправка ещё не подключена.'}${status.failed?` Ошибок отправки: ${status.failed}. Проверьте пароль приложения; портал повторяет попытку через час.`:''} Пароль приложения хранится только на сервере. Обычный пароль почты не нужен.</p>${crmField('Отправитель Mail.ru','from',status.from,'email',true)}${crmField('Пароль приложения Mail.ru','password','','password',true)}<p class="hint">Письма отправляются ответственному с 09:00 до 19:00 МСК. При переносе срока или смене ответственного новое напоминание будет отправлено отдельно.</p>`,async f=>{crm.busy=true;try{await api('/crm/mail',{method:'POST',body:jbody(f)});crmClose();await loadCrm();renderCrm();toast('Настройки почты сохранены');}finally{crm.busy=false;}});}catch(e){toast(e.message,true);}
