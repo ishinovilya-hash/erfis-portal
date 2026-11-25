@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru" data-theme="dark">
+<html lang="ru" data-theme="light">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -371,7 +371,7 @@ td.holder{min-width:160px}
 <div id="login" hidden>
   <div class="card">
     <svg class="login-logo" viewBox="0 0 1035.44 390.694" aria-label="ERFIS"><g fill="currentColor" data-logo="full"></g></svg>
-    <h1>Реестр объектов</h1>
+    <h1>ЭРФИС Портал</h1>
     <p>Внутренний портал ЭРФИС. Доступ только для сотрудников.</p>
     <form id="loginform">
       <div><label for="li-email">Рабочая почта</label><input id="li-email" type="email" autocomplete="username" required /></div>
@@ -404,7 +404,7 @@ td.holder{min-width:160px}
       <div class="sub">Портал сотрудников</div>
     </div>
     <nav class="nav" id="nav"></nav>
-    <div class="foot" id="foot">Реестр объектов ЭРФИС</div>
+    <div class="foot" id="foot">ЭРФИС · Рабочее пространство</div>
   </aside>
 
   <div class="main">
@@ -447,6 +447,7 @@ td.holder{min-width:160px}
 <script src="/logo.js"></script>
 <script src="/qrcode.js"></script>
 <link rel="stylesheet" href="/crm.css?v=1">
+<link rel="stylesheet" href="/portal-theme.css?v=1">
 <script src="/clients360.js?v=2"></script>
 <script src="/crm.js?v=1"></script>
 <script>
@@ -1865,6 +1866,7 @@ function renderBell(){
 
 /* ---------- top render ---------- */
 function renderAll(){
+  $('#view').dataset.route=state.route;
   const r = ROUTES[state.route] || ROUTES.trademarks;
   $('#pagetitle').textContent = r.title;
   $('#crumb').textContent = r.crumb;
@@ -1885,14 +1887,14 @@ function renderAll(){
 
 /* ---------- theme ---------- */
 function applyTheme(){
-  try{ state.theme = localStorage.getItem('erfis_theme'); }catch(e){}
+  try{ state.theme = localStorage.getItem('erfis_theme_sneat_v1'); }catch(e){}
   if(state.theme) document.documentElement.setAttribute('data-theme', state.theme);
-  else document.documentElement.setAttribute('data-theme', 'dark');
+  else document.documentElement.setAttribute('data-theme', 'light');
 }
 function toggleTheme(){
-  const cur = state.theme || 'dark';
+  const cur = state.theme || 'light';
   state.theme = cur==='dark'?'light':'dark';
-  try{ localStorage.setItem('erfis_theme', state.theme); }catch(e){}
+  try{ localStorage.setItem('erfis_theme_sneat_v1', state.theme); }catch(e){}
   applyTheme();
 }
 
