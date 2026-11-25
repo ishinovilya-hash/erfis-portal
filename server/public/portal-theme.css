@@ -205,3 +205,18 @@ input:not([type="checkbox"]):not([type="radio"]),select,textarea{accent-color:va
 .crm-month-panel>.hint{font-size:10px}
 .crm-report-table{overflow:auto}.crm-report-table th{white-space:normal;font-size:11px}.crm-report-table td{font-size:13px}
 @media(max-width:880px){.crm-month-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.crm-month-summary{grid-template-columns:90px minmax(0,1fr)}}
+
+.crm-drop-actions{position:fixed;z-index:150;bottom:16px;left:calc(50% + 127px);transform:translateX(-50%);width:min(720px,calc(100vw - 300px));display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.crm-drop-actions[hidden]{display:none}
+.crm-drop-actions>div{position:static;transform:none;width:auto;min-height:78px;padding:16px;border:2px dashed;border-radius:9px;display:grid;place-content:center;text-align:center;font-size:16px;box-shadow:var(--shadow-lg)}
+.crm-drop-actions .crm-drop-trash{background:var(--crit-bg);color:var(--crit);border-color:var(--crit)}
+.crm-drop-actions .crm-drop-won{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.crm-drop-won.crm-drop-over{outline:3px solid var(--ok)}
+.crm-month-summary>span{padding:6px 10px;gap:1px;font-size:10px}
+.crm-month-panel{padding:4px 10px}
+.crm-month-heading{font-size:11px;line-height:1.3}
+.crm-month-heading .btn{min-height:23px;padding:2px 7px}
+.crm-month-metrics{margin:3px 0;gap:8px}
+.crm-month-metrics strong,.crm-month-summary>span strong{font-size:18px}
+.crm-month-panel>.hint{line-height:1.2}
+@media(max-width:880px){.crm-drop-actions{left:50%;width:calc(100vw - 28px);gap:8px}.crm-drop-actions>div{font-size:14px;padding:12px;min-height:70px}}

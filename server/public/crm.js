@@ -2,7 +2,7 @@ const CRM_DIRECTIONS=[['patents','Изобретения и полезные м�
 /* CRM uses the portal session, clients and existing employee directory. */
 const CRM_SERVICE_SUGGESTIONS=['Регистрация товарного знака','Поиск товарного знака','Продление товарного знака','Регистрация изобретения','Регистрация полезной модели','Патентный поиск','Регистрация промышленного образца','Регистрация программы для ЭВМ','Включение ПО в реестр Минцифры','Лицензионный договор','Отчуждение исключительного права'];
 const CRM_LABELS={new:'Новый лид',offer:'Выставлено КП',contract:'Заключение договора / счёт',work:'В работе',act_ready:'Можно делать акт',act_sent:'Акт отправлен',won:'Сделан акт',lost:'Отказ'};
-const crm={deals:null,clients:[],trash:[],mode:'active',responsible:'',upsell:false,drag:null,busy:false};
+const crm={deals:null,clients:[],trash:[],mode:'active',responsible:'',drag:null,busy:false};
 const crmMoney=n=>Number(n||0).toLocaleString('ru-RU',{maximumFractionDigits:2})+' ₽';
 const crmClient=id=>crm.clients.find(c=>c.id===id);
 const crmDT=v=>v?new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow',dateStyle:'short',timeStyle:'short'}).format(new Date(v)): 'Без срока';
@@ -15,7 +15,7 @@ async function loadCrm(){
 }
 function crmVisible(d){
   const q=state.ui.q.toLocaleLowerCase('ru').trim();
-  return (!crm.responsible||d.responsible_id===crm.responsible)&&(!crm.upsell||d.parent_deal_id||(d.tags||[]).includes('Доп. продажа'))&&
+  return (!crm.responsible||d.responsible_id===crm.responsible)&&
     (!q||[d.title,crmClient(d.client_id)?.name,d.contact?.name,d.contact?.phone,d.contact?.email,...(d.tags||[])].some(v=>String(v||'').toLocaleLowerCase('ru').includes(q)));
 }
 function crmReport(){
@@ -25,7 +25,7 @@ function crmReport(){
   const months=[];
   for(let month=current;month>=first;){months.push(month);const [y,m]=month.split('-').map(Number);month=m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`;}
   const directions=[...CRM_DIRECTIONS,['','Без направления']];
-  crmDialog('Передано в работу · по месяцам',`<p class="hint">Количество сделок по дате первой передачи в работу. Повторный перевод не считается новой продажей. Завершение, перенос в корзину и её очистка не удаляют факт из отчёта. Исправление даты или направления в карточке пересчитывает отчёт.</p><div class="crm-report-table"><table><thead><tr><th>Месяц</th>${directions.map(([,label])=>`<th>${label}</th>`).join('')}<th>Всего</th></tr></thead><tbody>${months.map(month=>{const counts=directions.map(([key])=>rows.find(r=>r.month===month&&r.direction===key)?.count||0);return `<tr><td>${month.split('-').reverse().join('.')}</td>${counts.map(n=>`<td>${n}</td>`).join('')}<td>${counts.reduce((a,b)=>a+b,0)}</td></tr>`;}).join('')}</tbody></table></div><p class="hint">Сделок без даты передачи: ${report.missingDate}. Заполните дату и направление в карточках старых сделок. Одна сделка считается одной единицей.</p>`,null);
+  crmDialog('Передано в работу · по месяцам',`<p class="hint">Количество сделок по дате первой передачи в работу. Повторный перевод не считается новой продажей. Завершение, перенос в отстойник и её очистка не удаляют факт из отчёта. Исправление даты или направления в карточке пересчитывает отчёт.</p><div class="crm-report-table"><table><thead><tr><th>Месяц</th>${directions.map(([,label])=>`<th>${label}</th>`).join('')}<th>Всего</th></tr></thead><tbody>${months.map(month=>{const counts=directions.map(([key])=>rows.find(r=>r.month===month&&r.direction===key)?.count||0);return `<tr><td>${month.split('-').reverse().join('.')}</td>${counts.map(n=>`<td>${n}</td>`).join('')}<td>${counts.reduce((a,b)=>a+b,0)}</td></tr>`;}).join('')}</tbody></table></div><p class="hint">Сделок без даты передачи: ${report.missingDate}. Заполните дату и направление в карточках старых сделок. Одна сделка считается одной единицей.</p>`,null);
 }
 function crmCard(d,trash=false){
   const tasks=(d.tasks||[]).filter(t=>t.status==='open');
@@ -43,22 +43,22 @@ function crmCard(d,trash=false){
 function renderCrm(){
   if(!crm.deals){$('#view').innerHTML='<div class="pageloader">Загрузка CRM…</div>';return;}
   const rows=(crm.mode==='trash'?crm.trash:crm.deals).filter(crmVisible);
-  const stages=Object.keys(CRM_LABELS).filter(s=>crm.mode==='closed'?['won','lost'].includes(s):!['won','lost'].includes(s));
+  const stages=Object.keys(CRM_LABELS).filter(s=>!['won','lost'].includes(s));
   const tasks=rows.flatMap(d=>(d.tasks||[]).filter(t=>t.status==='open').map(t=>({...t,deal:d}))).sort((a,b)=>(a.due_at||'9999').localeCompare(b.due_at||'9999'));
   const active=crm.deals.filter(d=>!['won','lost'].includes(d.stage));
   const month=crm.report?.month||new Date(Date.now()+10800000).toISOString().slice(0,7);
   const count=(direction)=>(crm.report?.rows||[]).find(r=>r.month===month&&r.direction===direction)?.count||0;
   $('#view').innerHTML=`<div class="crm-summary crm-month-summary"><span><strong>${active.length}</strong> активных сделок</span><div class="crm-month-panel"><div class="crm-month-heading">Передано в работу · ${esc(month.split('-').reverse().join('.'))}<button class="btn" id="crm-report">По месяцам</button></div><div class="crm-month-metrics">${CRM_DIRECTIONS.map(([key,label])=>`<div><strong>${count(key)}</strong><span>${label}</span></div>`).join('')}</div><div class="hint">Без направления за месяц: ${count('')}${crm.report?.missingDate?` · Без даты передачи: ${crm.report.missingDate}`:''}</div></div></div>
-    <div class="toolbar crm-toolbar"><div class="crm-tabs">${[['active','Воронка'],['closed','Закрытые'],['tasks','Задачи'],['trash',`Корзина (${crm.trash.length})`]].map(([k,l])=>`<button class="btn ${crm.mode===k?'primary':''}" data-crm-mode="${k}">${l}</button>`).join('')}</div>
+    <div class="toolbar crm-toolbar"><div class="crm-tabs">${[['active','Воронка'],['tasks','Задачи'],['trash',`Отстойник (${crm.trash.length+crm.deals.filter(d=>d.stage==='lost').length})`],['won',`Успешно завершённые (${crm.deals.filter(d=>d.stage==='won').length})`]].map(([k,l])=>`<button class="btn ${crm.mode===k?'primary':''}" data-crm-mode="${k}">${l}</button>`).join('')}</div>
     <select id="crm-responsible" aria-label="Ответственный"><option value="">Все ответственные</option>${state.users.map(u=>`<option value="${esc(u.id)}" ${crm.responsible===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select>
-    <label class="crm-check"><input type="checkbox" id="crm-upsells" ${crm.upsell?'checked':''}>Доп. продажи</label><span class="spacer"></span><button class="btn primary" id="crm-add">Новая сделка</button></div>
-    ${crm.mode==='trash'?`<div class="toolbar"><span class="hint">Сделки хранятся здесь до ручной очистки. Клиенты и объекты не удаляются.</span><button class="btn danger" id="crm-empty" ${crm.trash.length?'':'disabled'}>Очистить корзину</button></div><div class="crm-card-grid">${rows.map(d=>crmCard(d,true)).join('')||'<div class="empty">Корзина пуста</div>'}</div>`:
+    <span class="spacer"></span><button class="btn primary" id="crm-add">Новая сделка</button></div>
+    ${crm.mode==='trash'?`<div class="toolbar"><span class="hint">Сделки хранятся здесь до ручной очистки. Клиенты и объекты не удаляются.</span><button class="btn danger" id="crm-empty" ${crm.trash.length?'':'disabled'}>Очистить отстойник</button></div><div class="crm-card-grid">${rows.map(d=>crmCard(d,true)).join('')||(crm.deals.some(d=>d.stage==='lost'&&crmVisible(d))?'':'<div class="empty">Отстойник пуст</div>')}${crm.deals.filter(d=>d.stage==='lost'&&crmVisible(d)).map(d=>crmCard(d)).join('')}</div>`:
+    crm.mode==='won'?`<div class="crm-card-grid">${rows.filter(d=>d.stage==='won').map(d=>crmCard(d)).join('')||'<div class="empty">Успешно завершённых сделок пока нет</div>'}</div>`:
     crm.mode==='tasks'?`<div class="listcard">${tasks.map(t=>`<div class="lrow"><div class="lr-main"><button class="crm-card-title" data-open-deal="${esc(t.deal.id)}">${esc(t.title)}</button><div class="lr-s">${esc(t.deal.title)} · ${esc(userName(t.assigned_to)||'Без ответственного')}</div><div class="${t.due_at&&new Date(t.due_at)<new Date()?'overdue':'hint'}">${esc(crmDT(t.due_at))} МСК</div></div><button class="btn" data-task-done="${esc(t.id)}" data-task-deal="${esc(t.deal.id)}">Выполнено</button></div>`).join('')||'<div class="empty">Невыполненных задач нет</div>'}</div>`:
     `<div class="crm-board">${stages.map(s=>{const list=rows.filter(d=>d.stage===s);return `<section class="crm-column" data-stage="${s}"><header><h3>${CRM_LABELS[s]}</h3><span>${list.length} · ${crmMoney(list.reduce((n,d)=>n+d.budget,0))}</span></header><div class="crm-column-cards">${list.map(d=>crmCard(d)).join('')||'<div class="crm-column-empty">Перетащите сделку сюда</div>'}</div></section>`;}).join('')}</div>`}
-    <div id="crm-drop-trash" class="crm-drop-trash" hidden>Отпустите карточку здесь — переместить в корзину</div>`;
+    <div id="crm-drop-actions" class="crm-drop-actions" hidden><div id="crm-drop-trash" class="crm-drop-trash">Отстойник</div><div id="crm-drop-won" class="crm-drop-won">Успешно завершена</div></div>`;
   document.querySelectorAll('[data-crm-mode]').forEach(b=>b.onclick=()=>{crm.mode=b.dataset.crmMode;renderCrm();});
   $('#crm-responsible').onchange=e=>{crm.responsible=e.target.value;renderCrm();};
-  $('#crm-upsells').onchange=e=>{crm.upsell=e.target.checked;renderCrm();};
   $('#crm-add').onclick=()=>crmEdit();
   $('#crm-report').onclick=crmReport;
   const openDeal=id=>crmEdit([...crm.deals,...crm.trash].find(d=>d.id===id));
@@ -71,13 +71,14 @@ function renderCrm(){
   });
   document.querySelectorAll('[data-restore-deal]').forEach(b=>b.onclick=()=>crmMutation('/crm/deals/'+b.dataset.restoreDeal+'/restore','POST',{revision:crm.trash.find(d=>d.id===b.dataset.restoreDeal).revision}));
   document.querySelectorAll('[data-task-done]').forEach(b=>b.onclick=()=>crmCompleteTask(b.dataset.taskDeal,b.dataset.taskDone));
-  if($('#crm-empty'))$('#crm-empty').onclick=()=>{if(confirm(`Безвозвратно удалить ${crm.trash.length} сделок из корзины вместе с их задачами и примечаниями?`))crmMutation('/crm/trash','DELETE',{deals:crm.trash.map(({id,revision})=>({id,revision}))});};
+  if($('#crm-empty'))$('#crm-empty').onclick=()=>{if(confirm(`Безвозвратно удалить ${crm.trash.length} сделок из отстойника вместе с их задачами и примечаниями?`))crmMutation('/crm/trash','DELETE',{deals:crm.trash.map(({id,revision})=>({id,revision}))});};
   document.querySelectorAll('.crm-card[draggable]').forEach(el=>{
-    el.ondragstart=e=>{const d=crm.deals.find(x=>x.id===el.dataset.deal);crm.drag={id:d.id,revision:d.revision};e.dataTransfer.setData('text/plain',d.id);e.dataTransfer.effectAllowed='move';$('#crm-drop-trash').hidden=false;};
-    el.ondragend=()=>{crm.drag=null;if($('#crm-drop-trash'))$('#crm-drop-trash').hidden=true;document.querySelectorAll('.crm-drop-over').forEach(x=>x.classList.remove('crm-drop-over'));};
+    el.ondragstart=e=>{const d=crm.deals.find(x=>x.id===el.dataset.deal);crm.drag={id:d.id,revision:d.revision};e.dataTransfer.setData('text/plain',d.id);e.dataTransfer.effectAllowed='move';$('#crm-drop-actions').hidden=false;};
+    el.ondragend=()=>{crm.drag=null;if($('#crm-drop-actions'))$('#crm-drop-actions').hidden=true;document.querySelectorAll('.crm-drop-over').forEach(x=>x.classList.remove('crm-drop-over'));};
   });
-  const drop=(el,fn)=>{el.ondragover=e=>{if(crm.drag){e.preventDefault();e.dataTransfer.dropEffect='move';el.classList.add('crm-drop-over');}};el.ondragleave=()=>el.classList.remove('crm-drop-over');el.ondrop=e=>{e.preventDefault();el.classList.remove('crm-drop-over');const drag=crm.drag;crm.drag=null;$('#crm-drop-trash').hidden=true;if(drag)fn(drag);};};
+  const drop=(el,fn)=>{el.ondragover=e=>{if(crm.drag){e.preventDefault();e.dataTransfer.dropEffect='move';el.classList.add('crm-drop-over');}};el.ondragleave=()=>el.classList.remove('crm-drop-over');el.ondrop=e=>{e.preventDefault();el.classList.remove('crm-drop-over');const drag=crm.drag;crm.drag=null;$('#crm-drop-actions').hidden=true;if(drag)fn(drag);};};
   document.querySelectorAll('[data-stage]').forEach(el=>drop(el,drag=>{const d=crm.deals.find(x=>x.id===drag.id);if(d&&d.stage!==el.dataset.stage)crmWorkflow(d,{revision:drag.revision,stage:el.dataset.stage});}));
+  drop($('#crm-drop-won'),drag=>{const d=crm.deals.find(x=>x.id===drag.id);if(d&&d.stage!=='won')crmWorkflow(d,{revision:drag.revision,stage:'won'});});
   drop($('#crm-drop-trash'),drag=>crmMutation('/crm/deals/'+drag.id,'DELETE',{revision:drag.revision}));
 }
 async function crmMutation(path,method,body){
@@ -130,7 +131,7 @@ function crmWorkflow(d,b){
 }
 function crmEdit(original){
   const d=original||{title:'',client_id:'',stage:'new',responsible_id:state.me.id,budget:0,duties:0,paid:null,contact:{},tags:[],notes:[],tasks:[]};
-  if(d.deleted_at){crmDialog('Сделка в корзине',`<p>${esc(d.title)}</p><p>${esc(crmClient(d.client_id)?.name)}</p><p>Восстановите сделку, чтобы изменить её.</p>`,null);return;}
+  if(d.deleted_at){crmDialog('Сделка в отстойнике',`<p>${esc(d.title)}</p><p>${esc(crmClient(d.client_id)?.name)}</p><p>Восстановите сделку, чтобы изменить её.</p>`,null);return;}
   const contact=d.contact||{};
   const body=`<div class="crm-form-grid">${crmField('Название сделки','title',d.title,'text',true)}
     <label class="crm-field">Клиент 360<input name="client_name" list="crm-client-list" value="${esc(crmClient(d.client_id)?.name||'')}" required autocomplete="off"><datalist id="crm-client-list">${crm.clients.map(c=>`<option value="${esc(c.name)}"></option>`).join('')}</datalist></label>
@@ -142,7 +143,7 @@ function crmEdit(original){
     </div><h3>Контакт</h3><div class="crm-form-grid">${[['name','Имя'],['email','Email'],['phone','Телефон'],['telegram','Telegram'],['position','Должность']].map(([k,l])=>crmField(l,'contact_'+k,contact[k]||'',k==='email'?'email':'text')).join('')}</div>
     ${contact.company?`<p class="hint">Компания контакта в amoCRM: ${esc(contact.company)}</p>`:''}
     <h3>Примечания</h3><div class="crm-notes">${(d.notes||[]).map(n=>`<p>${esc(typeof n==='string'?n:n.text)}</p>`).join('')||'<p class="hint">Примечаний пока нет</p>'}</div><label class="crm-field">Добавить примечание<textarea name="new_note" rows="3"></textarea></label>
-    ${d.id?`<h3>Задачи</h3>${(d.tasks||[]).map(t=>`<div class="crm-task-line"><div><button type="button" class="crm-card-title" data-edit-task="${esc(t.id)}">${esc(t.title)}</button><div class="hint">${esc(userName(t.assigned_to)||'Без ответственного')} · ${esc(crmDT(t.due_at))} МСК · ${t.status==='done'?'Выполнено':'Не выполнено'}</div></div>${t.status==='open'?`<button class="btn" type="button" data-edit-complete="${esc(t.id)}">Выполнено</button>`:''}</div>`).join('')||'<p class="hint">Задач пока нет</p>'}<div class="crm-editor-actions"><button type="button" class="btn" id="crm-task-add">Добавить задачу</button><button type="button" class="btn" id="crm-client-open">Карточка клиента →</button><button type="button" class="btn" id="crm-upsell-add">Доп. продажа</button><button type="button" class="btn danger" id="crm-deal-delete">В корзину</button></div>`:''}`;
+    ${d.id?`<h3>Задачи</h3>${(d.tasks||[]).map(t=>`<div class="crm-task-line"><div><button type="button" class="crm-card-title" data-edit-task="${esc(t.id)}">${esc(t.title)}</button><div class="hint">${esc(userName(t.assigned_to)||'Без ответственного')} · ${esc(crmDT(t.due_at))} МСК · ${t.status==='done'?'Выполнено':'Не выполнено'}</div></div>${t.status==='open'?`<button class="btn" type="button" data-edit-complete="${esc(t.id)}">Выполнено</button>`:''}</div>`).join('')||'<p class="hint">Задач пока нет</p>'}<div class="crm-editor-actions"><button type="button" class="btn" id="crm-task-add">Добавить задачу</button><button type="button" class="btn" id="crm-client-open">Карточка клиента →</button><button type="button" class="btn" id="crm-upsell-add">Доп. продажа</button><button type="button" class="btn danger" id="crm-deal-delete">В отстойник</button></div>`:''}`;
   const el=crmDialog(d.id?'Карточка сделки':'Новая сделка',body,async f=>{
     const client=crm.clients.find(c=>c.name===f.client_name.trim());if(!client)throw Error('Выберите существующего клиента из списка. Нового клиента сначала создайте в «Клиенты 360».');
     const patch={title:f.title,client_id:client.id,responsible_id:f.responsible_id,stage:f.stage,budget:Number(f.budget),duties:Number(f.duties||0),paid:f.paid===''?null:Number(f.paid),service:f.service,direction:f.direction,work_started_on:f.work_started_on,source:f.source,tags:f.tags.split(',').map(x=>x.trim()).filter(Boolean),executor_id:f.executor_id||null,deadline:f.deadline,contact:{...contact,...Object.fromEntries(['name','email','phone','telegram','position'].map(k=>[k,f['contact_'+k]]))}};
@@ -154,7 +155,7 @@ function crmEdit(original){
   if(!d.id){el.querySelector('[name="client_name"]').onchange=e=>{const c=crm.clients.find(x=>x.name===e.target.value);const t=c?.contacts?.[0];if(t)for(const k of ['name','email','phone','telegram']){const input=el.querySelector(`[name="contact_${k}"]`);if(!input.value)input.value=t[k]||'';}};}
   if(d.id){
     $('#crm-client-open').onclick=async()=>{crmClose();state.route='clients';history.replaceState(null,'','#/clients');state.clientView=d.client_id;state.clientDetail=null;renderAll();await loadClientDetail(d.client_id);};
-    $('#crm-deal-delete').onclick=()=>{if(confirm('Переместить сделку в корзину? Её можно будет восстановить.')){crmClose();crmMutation('/crm/deals/'+d.id,'DELETE',{revision:d.revision});}};
+    $('#crm-deal-delete').onclick=()=>{if(confirm('Переместить сделку в отстойник? Её можно будет восстановить.')){crmClose();crmMutation('/crm/deals/'+d.id,'DELETE',{revision:d.revision});}};
     el.querySelectorAll('[data-edit-task]').forEach(b=>b.onclick=()=>{if(confirm('Изменить задачу? Несохранённые изменения карточки не сохранятся.'))crmTaskForm(d,d.tasks.find(t=>t.id===b.dataset.editTask));});
     $('#crm-task-add').onclick=()=>{if(confirm('Перейти к новой задаче? Несохранённые изменения карточки не сохранятся.'))crmTaskForm(d);};
     $('#crm-upsell-add').onclick=()=>{if(confirm('Создать отдельную сделку для доп. продажи? Несохранённые изменения карточки не сохранятся.'))crmEdit({title:'Доп. продажа: '+d.title,client_id:d.client_id,parent_deal_id:d.id,stage:'new',responsible_id:d.responsible_id,budget:0,duties:0,paid:null,contact:{...contact},tags:['Доп. продажа'],notes:[],tasks:[]});};
