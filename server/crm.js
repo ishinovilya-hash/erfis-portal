@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+export const CRM_DIRECTIONS = ['', 'patents', 'trademarks', 'mincifry', 'software'];
+const moscowDay = () => new Date(Date.now()+10800000).toISOString().slice(0,10);
 export const CRM_STAGES = Object.freeze(['new','offer','contract','work','act_ready','act_sent','won','lost']);
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), {status}); };
 const now = () => new Date().toISOString();
@@ -46,6 +48,16 @@ export function initCrm(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_crm_note_deal ON crm_notes(deal_id);
   `));
+  atomic(db, () => {
+    const columns=new Set(db.prepare('PRAGMA table_info(crm_deals)').all().map(c=>c.name));
+    if(!columns.has('direction'))db.exec("ALTER TABLE crm_deals ADD COLUMN direction TEXT NOT NULL DEFAULT ''");
+    if(!columns.has('work_started_on'))db.exec("ALTER TABLE crm_deals ADD COLUMN work_started_on TEXT NOT NULL DEFAULT ''");
+    // Independent from deal deletion: a recorded start remains in historical totals.
+    db.exec(`CREATE TABLE IF NOT EXISTS crm_work_register (
+      deal_id TEXT PRIMARY KEY, direction TEXT NOT NULL, started_on TEXT NOT NULL,
+      recorded_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    )`);
+  });
 }
 
 function text(value, field, limit = 2000) {
@@ -75,10 +87,10 @@ function dealApi(db,row) {
     tasks:db.prepare('SELECT * FROM crm_tasks WHERE deal_id=? ORDER BY created_at,id').all(row.id),
     notes:db.prepare('SELECT * FROM crm_notes WHERE deal_id=? ORDER BY rowid').all(row.id)};
 }
-const fields = ['client_id','title','responsible_id','executor_id','service','source','tags','budget','duties','paid','allow_advance','deadline','next_action','next_contact','contact','stage','source_id','lost_reason','parent_deal_id'];
+const fields = ['direction','work_started_on','client_id','title','responsible_id','executor_id','service','source','tags','budget','duties','paid','allow_advance','deadline','next_action','next_contact','contact','stage','source_id','lost_reason','parent_deal_id'];
 function values(db,b,old) {
   if (!object(b)) fail('Ожидается объект');
-  const d = {...{responsible_id:null,executor_id:null,service:'',source:'',tags:[],budget:0,duties:0,paid:null,allow_advance:false,deadline:'',next_action:'',next_contact:'',contact:{},stage:'new',source_id:null,lost_reason:'',parent_deal_id:null},
+  const d = {...{direction:'',work_started_on:'',responsible_id:null,executor_id:null,service:'',source:'',tags:[],budget:0,duties:0,paid:null,allow_advance:false,deadline:'',next_action:'',next_contact:'',contact:{},stage:'new',source_id:null,lost_reason:'',parent_deal_id:null},
     ...(old ? {...old,tags:JSON.parse(old.tags),contact:JSON.parse(old.contact),allow_advance:!!old.allow_advance}:{} )};
   for (const key of fields) if(own(b,key)) d[key]=b[key];
   d.client_id=reference(db,'counterparties',d.client_id,'client_id',true);
@@ -91,6 +103,10 @@ function values(db,b,old) {
   }
   for(const key of ['title','service','source','next_action','lost_reason']) d[key]=text(d[key],key);
   if(!d.title)fail('Укажите название');
+  if(!CRM_DIRECTIONS.includes(d.direction))fail('Неверное направление услуги');
+  d.work_started_on=date(d.work_started_on,'work_started_on');
+  if(d.work_started_on && (!/^\d{4}-\d{2}-\d{2}$/.test(d.work_started_on)||d.work_started_on>moscowDay()))fail('Дата передачи в работу не может быть будущей');
+  if(old?.work_started_on&&!d.work_started_on)fail('Укажите дату передачи в работу; её можно исправить, но нельзя удалить');
   for(const key of ['deadline','next_contact'])d[key]=date(d[key],key);
   for(const key of ['budget','duties','paid']) {
     if(key==='paid' && d[key]===null)continue;
@@ -146,12 +162,16 @@ function save(db,b,id=null,historical=false) {
   const d=values(db,b,old),at=now(),cid=id||'cd-'+randomUUID();
   // Existing historical rows can be edited without retroactively imposing entry gates.
   if(!historical && (!old||old.stage!==d.stage))gate(d);
+  if(!historical && d.stage==='work' && old?.stage!=='work' && !d.work_started_on)d.work_started_on=moscowDay();
   if(old) db.prepare(`UPDATE crm_deals SET ${fields.map(k=>k+'=?').join(',')},revision=revision+1,updated_at=? WHERE id=?`).run(...fields.map(k=>d[k]),at,cid);
   else {
     const created=historical&&b.created_at?date(b.created_at,'created_at'):at;
     const updated=historical&&b.updated_at?date(b.updated_at,'updated_at'):at;
     db.prepare(`INSERT INTO crm_deals(id,${fields.join(',')},created_at,updated_at) VALUES(${Array(fields.length+3).fill('?').join(',')})`).run(cid,...fields.map(k=>d[k]),created,updated);
   }
+  if(d.work_started_on)db.prepare(`INSERT INTO crm_work_register(deal_id,direction,started_on,recorded_at,updated_at)
+    VALUES(?,?,?,?,?) ON CONFLICT(deal_id) DO UPDATE SET direction=excluded.direction,started_on=excluded.started_on,updated_at=excluded.updated_at`)
+    .run(cid,d.direction,d.work_started_on,at,at);
   if(own(b,'notes'))saveNotes(db,cid,b.notes);
   const row=rawDeal(db,cid);
   if(historical) {
@@ -195,6 +215,11 @@ export function registerCrmRoutes({route,db,json,readBody,currentUser,logActivit
     }
   });
   const log=(kind,deal,user)=>logActivity(kind,deal?{id:deal.id,type:'crm_deal'}:null,deal?deal.title:'Очищена корзина CRM',user.id);
+  register('GET','/api/crm/report',()=>({
+    month:moscowDay().slice(0,7),
+    rows:db.prepare("SELECT substr(started_on,1,7) month,direction,count(*) count FROM crm_work_register GROUP BY month,direction ORDER BY month DESC").all(),
+    missingDate:db.prepare("SELECT count(*) n FROM crm_deals WHERE deleted_at IS NULL AND stage IN ('work','act_ready','act_sent','won') AND work_started_on='' ").get().n
+  }));
   register('GET','/api/crm/deals',(_b,_p,url)=>{
     const query=url?.searchParams||new URLSearchParams();
     let sql='SELECT * FROM crm_deals WHERE deleted_at IS '+(query.get('trash')==='1'?'NOT NULL':'NULL');

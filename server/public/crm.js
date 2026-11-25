@@ -1,3 +1,4 @@
+const CRM_DIRECTIONS=[['patents','Изобретения и полезные модели'],['trademarks','Товарные знаки'],['mincifry','Минцифры'],['software','Программы для ЭВМ']];
 /* CRM uses the portal session, clients and existing employee directory. */
 const CRM_LABELS={new:'Новый лид',offer:'Выставлено КП',contract:'Заключение договора / счёт',work:'В работе',act_ready:'Можно делать акт',act_sent:'Акт отправлен',won:'Сделан акт',lost:'Отказ'};
 const crm={deals:null,clients:[],trash:[],mode:'active',responsible:'',upsell:false,drag:null,busy:false};
@@ -8,13 +9,22 @@ const crmInputTime=v=>v?new Date(new Date(v).getTime()+10800000).toISOString().s
 const crmISO=v=>v?v+':00+03:00':'';
 function crmBusy(){return crm.busy||!!crm.drag||!!document.querySelector('#crm-dialog');}
 async function loadCrm(){
-  const [deals,clients,trash]=await Promise.all([api('/crm/deals'),api('/clients'),api('/crm/deals?trash=1')]);
-  crm.deals=deals.deals;crm.clients=clients.clients;crm.trash=trash.deals;
+  const [deals,clients,trash,report]=await Promise.all([api('/crm/deals'),api('/clients'),api('/crm/deals?trash=1'),api('/crm/report')]);
+  crm.report=report;crm.deals=deals.deals;crm.clients=clients.clients;crm.trash=trash.deals;
 }
 function crmVisible(d){
   const q=state.ui.q.toLocaleLowerCase('ru').trim();
   return (!crm.responsible||d.responsible_id===crm.responsible)&&(!crm.upsell||d.parent_deal_id||(d.tags||[]).includes('Доп. продажа'))&&
     (!q||[d.title,crmClient(d.client_id)?.name,d.contact?.name,d.contact?.phone,d.contact?.email,...(d.tags||[])].some(v=>String(v||'').toLocaleLowerCase('ru').includes(q)));
+}
+function crmReport(){
+  const report=crm.report,rows=report?.rows||[];
+  const current=report.month;
+  const first=rows.length?rows.map(r=>r.month).sort()[0]:current;
+  const months=[];
+  for(let month=current;month>=first;){months.push(month);const [y,m]=month.split('-').map(Number);month=m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`;}
+  const directions=[...CRM_DIRECTIONS,['','Без направления']];
+  crmDialog('Передано в работу · по месяцам',`<p class="hint">Количество сделок по дате первой передачи в работу. Повторный перевод не считается новой продажей. Завершение, перенос в корзину и её очистка не удаляют факт из отчёта. Исправление даты или направления в карточке пересчитывает отчёт.</p><div class="crm-report-table"><table><thead><tr><th>Месяц</th>${directions.map(([,label])=>`<th>${label}</th>`).join('')}<th>Всего</th></tr></thead><tbody>${months.map(month=>{const counts=directions.map(([key])=>rows.find(r=>r.month===month&&r.direction===key)?.count||0);return `<tr><td>${month.split('-').reverse().join('.')}</td>${counts.map(n=>`<td>${n}</td>`).join('')}<td>${counts.reduce((a,b)=>a+b,0)}</td></tr>`;}).join('')}</tbody></table></div><p class="hint">Сделок без даты передачи: ${report.missingDate}. Заполните дату и направление в карточках старых сделок. Одна сделка считается одной единицей.</p>`,null);
 }
 function crmCard(d,trash=false){
   const tasks=(d.tasks||[]).filter(t=>t.status==='open');
@@ -35,7 +45,9 @@ function renderCrm(){
   const stages=Object.keys(CRM_LABELS).filter(s=>crm.mode==='closed'?['won','lost'].includes(s):!['won','lost'].includes(s));
   const tasks=rows.flatMap(d=>(d.tasks||[]).filter(t=>t.status==='open').map(t=>({...t,deal:d}))).sort((a,b)=>(a.due_at||'9999').localeCompare(b.due_at||'9999'));
   const active=crm.deals.filter(d=>!['won','lost'].includes(d.stage));
-  $('#view').innerHTML=`<div class="crm-summary"><span><strong>${active.length}</strong> активных сделок</span><span><strong>${crmMoney(active.reduce((s,d)=>s+d.budget,0))}</strong> бюджет активных сделок</span><span>Пошлины учитываются отдельно</span></div>
+  const month=crm.report?.month||new Date(Date.now()+10800000).toISOString().slice(0,7);
+  const count=(direction)=>(crm.report?.rows||[]).find(r=>r.month===month&&r.direction===direction)?.count||0;
+  $('#view').innerHTML=`<div class="crm-summary crm-month-summary"><span><strong>${active.length}</strong> активных сделок</span><div class="crm-month-panel"><div class="crm-month-heading">Передано в работу · ${esc(month.split('-').reverse().join('.'))}<button class="btn" id="crm-report">По месяцам</button></div><div class="crm-month-metrics">${CRM_DIRECTIONS.map(([key,label])=>`<div><strong>${count(key)}</strong><span>${label}</span></div>`).join('')}</div><div class="hint">Без направления за месяц: ${count('')}${crm.report?.missingDate?` · Без даты передачи: ${crm.report.missingDate}`:''}</div></div></div>
     <div class="toolbar crm-toolbar"><div class="crm-tabs">${[['active','Воронка'],['closed','Закрытые'],['tasks','Задачи'],['trash',`Корзина (${crm.trash.length})`]].map(([k,l])=>`<button class="btn ${crm.mode===k?'primary':''}" data-crm-mode="${k}">${l}</button>`).join('')}</div>
     <select id="crm-responsible" aria-label="Ответственный"><option value="">Все ответственные</option>${state.users.map(u=>`<option value="${esc(u.id)}" ${crm.responsible===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select>
     <label class="crm-check"><input type="checkbox" id="crm-upsells" ${crm.upsell?'checked':''}>Доп. продажи</label><span class="spacer"></span><button class="btn primary" id="crm-add">Новая сделка</button></div>
@@ -47,6 +59,7 @@ function renderCrm(){
   $('#crm-responsible').onchange=e=>{crm.responsible=e.target.value;renderCrm();};
   $('#crm-upsells').onchange=e=>{crm.upsell=e.target.checked;renderCrm();};
   $('#crm-add').onclick=()=>crmEdit();
+  $('#crm-report').onclick=crmReport;
   document.querySelectorAll('[data-open-deal]').forEach(b=>b.onclick=()=>crmEdit([...crm.deals,...crm.trash].find(d=>d.id===b.dataset.openDeal)));
   document.querySelectorAll('[data-restore-deal]').forEach(b=>b.onclick=()=>crmMutation('/crm/deals/'+b.dataset.restoreDeal+'/restore','POST',{revision:crm.trash.find(d=>d.id===b.dataset.restoreDeal).revision}));
   document.querySelectorAll('[data-task-done]').forEach(b=>b.onclick=()=>crmCompleteTask(b.dataset.taskDeal,b.dataset.taskDone));
@@ -116,7 +129,7 @@ function crmEdit(original){
     ${crmSelect('Этап','stage',d.stage,Object.entries(CRM_LABELS))}${crmSelect('Ответственный','responsible_id',d.responsible_id||'',crmUsers(),true)}
     ${crmField('Стоимость работ, ₽','budget',d.budget,'number',true)}${crmField('Пошлины, ₽','duties',d.duties||0,'number')}
     ${crmField('Оплачено за работы, ₽ · пусто = неизвестно','paid',d.paid??'','number')}${crmField('Услуга','service',d.service)}
-    ${crmField('Источник','source',d.source)}${crmField('Теги через запятую','tags',(d.tags||[]).join(', '))}
+    ${crmSelect('Направление услуги','direction',d.direction||'',[['','— Не указано'],...CRM_DIRECTIONS])}${crmField('Дата первой передачи в работу','work_started_on',d.work_started_on||'','date')}<p class="hint">Дата заполняется при первом переводе в работу. Для старых сделок укажите её вручную.</p>${crmField('Источник','source',d.source)}${crmField('Теги через запятую','tags',(d.tags||[]).join(', '))}
     ${crmSelect('Исполнитель','executor_id',d.executor_id||'',crmUsers())}${crmField('Дата окончания','deadline',d.deadline?.slice(0,10),'date')}
     </div><h3>Контакт</h3><div class="crm-form-grid">${[['name','Имя'],['email','Email'],['phone','Телефон'],['telegram','Telegram'],['position','Должность']].map(([k,l])=>crmField(l,'contact_'+k,contact[k]||'',k==='email'?'email':'text')).join('')}</div>
     ${contact.company?`<p class="hint">Компания контакта в amoCRM: ${esc(contact.company)}</p>`:''}
@@ -124,7 +137,7 @@ function crmEdit(original){
     ${d.id?`<h3>Задачи</h3>${(d.tasks||[]).map(t=>`<div class="crm-task-line"><div><button type="button" class="crm-card-title" data-edit-task="${esc(t.id)}">${esc(t.title)}</button><div class="hint">${esc(userName(t.assigned_to)||'Без ответственного')} · ${esc(crmDT(t.due_at))} МСК · ${t.status==='done'?'Выполнено':'Не выполнено'}</div></div>${t.status==='open'?`<button class="btn" type="button" data-edit-complete="${esc(t.id)}">Выполнено</button>`:''}</div>`).join('')||'<p class="hint">Задач пока нет</p>'}<div class="crm-editor-actions"><button type="button" class="btn" id="crm-task-add">Добавить задачу</button><button type="button" class="btn" id="crm-client-open">Карточка клиента →</button><button type="button" class="btn" id="crm-upsell-add">Доп. продажа</button><button type="button" class="btn danger" id="crm-deal-delete">В корзину</button></div>`:''}`;
   const el=crmDialog(d.id?'Карточка сделки':'Новая сделка',body,async f=>{
     const client=crm.clients.find(c=>c.name===f.client_name.trim());if(!client)throw Error('Выберите существующего клиента из списка. Нового клиента сначала создайте в «Клиенты 360».');
-    const patch={title:f.title,client_id:client.id,responsible_id:f.responsible_id,stage:f.stage,budget:Number(f.budget),duties:Number(f.duties||0),paid:f.paid===''?null:Number(f.paid),service:f.service,source:f.source,tags:f.tags.split(',').map(x=>x.trim()).filter(Boolean),executor_id:f.executor_id||null,deadline:f.deadline,contact:{...contact,...Object.fromEntries(['name','email','phone','telegram','position'].map(k=>[k,f['contact_'+k]]))}};
+    const patch={title:f.title,client_id:client.id,responsible_id:f.responsible_id,stage:f.stage,budget:Number(f.budget),duties:Number(f.duties||0),paid:f.paid===''?null:Number(f.paid),service:f.service,direction:f.direction,work_started_on:f.work_started_on,source:f.source,tags:f.tags.split(',').map(x=>x.trim()).filter(Boolean),executor_id:f.executor_id||null,deadline:f.deadline,contact:{...contact,...Object.fromEntries(['name','email','phone','telegram','position'].map(k=>[k,f['contact_'+k]]))}};
     if(d.id)patch.revision=d.revision;
     if(d.parent_deal_id)patch.parent_deal_id=d.parent_deal_id;
     if(f.new_note.trim())patch.notes=[...(d.notes||[]),f.new_note.trim()];

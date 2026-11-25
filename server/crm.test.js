@@ -149,3 +149,40 @@ test('stage changes preserve manual, generated and imported tasks until explicit
   const moved=(await patch(imported,{stage:'won'})).data.deal;
   assert.deepEqual(moved.tasks,imported.tasks);
 });
+
+test('monthly work register preserves first start, corrections and history after purge',async t=>{
+  const {db,call,create,patch}=fixture(t);
+  let d=await create({direction:'patents'});
+  assert.equal(d.work_started_on,'');
+  assert.equal((await call('GET','/api/crm/report')).data.rows.length,0);
+  const work={stage:'work',executor_id:'u2',deadline:'2026-12-02',paid:0};
+  assert.equal((await patch(d,{...work,task:{assigned_to:'missing'}})).status,400);
+  assert.equal(db.prepare('SELECT count(*) n FROM crm_work_register').get().n,0);
+  d=(await patch(d,work)).data.deal;
+  const started=d.work_started_on;assert.match(started,/^\d{4}-\d{2}-\d{2}$/);
+  d=(await patch(d,{stage:'contract'})).data.deal;
+  d=(await patch(d,work)).data.deal;assert.equal(d.work_started_on,started);
+  assert.equal((await patch(d,{direction:'invalid'})).status,400);
+  assert.equal((await patch(d,{work_started_on:'2026-02-30'})).status,400);
+  assert.equal((await patch(d,{work_started_on:'9999-12-01'})).status,400);
+  assert.equal((await patch(d,{work_started_on:''})).status,400);
+  d=(await patch(d,{direction:'software',work_started_on:'2025-02-01',stage:'won'})).data.deal;
+  const expected=[{month:'2025-02',direction:'software',count:1}];
+  assert.deepEqual(JSON.parse(JSON.stringify((await call('GET','/api/crm/report')).data.rows)),expected);
+  const removed=(await call('DELETE','/api/crm/deals/:id',{revision:d.revision},d.id)).data.deal;
+  assert.equal((await call('DELETE','/api/crm/trash',{deals:[{id:removed.id,revision:removed.revision}]})).status,200);
+  assert.deepEqual(JSON.parse(JSON.stringify((await call('GET','/api/crm/report')).data.rows)),expected);
+  initCrm(db);assert.equal(db.prepare('SELECT count(*) n FROM crm_work_register').get().n,1);
+});
+
+test('historical work dates stay unknown until supplied and directions can be filled later',async t=>{
+  const {db,call,patch}=fixture(t);
+  importCrmDeals(db,[{client_id:'c1',title:'Imported',stage:'work',source_id:'amo:987654'}]);
+  let d=(await call('GET','/api/crm/deals')).data.deals[0];
+  assert.equal(d.work_started_on,'');assert.equal((await call('GET','/api/crm/report')).data.missingDate,1);
+  d=(await patch(d,{work_started_on:'2025-03-10'})).data.deal;
+  assert.equal((await call('GET','/api/crm/report')).data.rows[0].direction,'');
+  d=(await patch(d,{direction:'mincifry'})).data.deal;
+  const report=(await call('GET','/api/crm/report')).data;
+  assert.equal(report.missingDate,0);assert.equal(report.rows[0].direction,'mincifry');assert.equal(report.rows[0].count,1);
+});
