@@ -26,3 +26,6 @@ server/data/_*.json
 # демо: хранится только исходник + сборщик
 demo/index.html
 demo/artifact.html
+
+# SMTP credentials: server-only, never commit
+server/data/crm-mail.json

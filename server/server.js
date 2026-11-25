@@ -16,6 +16,7 @@ import {
 import { buildSoprovod, soprovodFilename, soprovodAvailable } from './soprovod.js';
 import { contractDefaults, moveRefused, importRegistryUpdate } from './registry-update.js';
 import {initClients360, clientApi, saveClient, resolveObjectClient} from './clients360.js';
+import {startCrmMail} from './crm-mail.js';
 import {initCrm, registerCrmRoutes} from './crm.js';
 
 const OBJECT_TYPES = ['trademark', 'patent', 'software', 'shipment', 'contract'];
@@ -1105,5 +1106,6 @@ setInterval(() => {
 }, 6 * 3600 * 1000).unref();
 
 server.listen(PORT, '127.0.0.1', () => {
+  startCrmMail(db);
   console.log(`ЭРФИС Портал v${VERSION} — http://127.0.0.1:${PORT}`);
 });

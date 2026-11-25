@@ -30,12 +30,13 @@ function crmReport(){
 function crmCard(d,trash=false){
   const tasks=(d.tasks||[]).filter(t=>t.status==='open');
   const overdue=tasks.some(t=>t.due_at&&new Date(t.due_at)<new Date());
-  return `<article class="crm-card" tabindex="0" aria-label="${esc(d.title)} — открыть двойным кликом или Enter" ${trash?'':'draggable="true"'} data-deal="${esc(d.id)}">
+  return `<article class="crm-card ${d.deadline_alert?'crm-deadline-alert':''}" tabindex="0" aria-label="${esc(d.title)} — открыть двойным кликом или Enter" ${trash?'':'draggable="true"'} data-deal="${esc(d.id)}">
     <div class="crm-company" title="${esc(crmClient(d.client_id)?.name||'Клиент')}">${esc(crmClient(d.client_id)?.name||'Клиент')}</div>
     ${d.created_at?`<div class="crm-card-date" title="Дата создания сделки">${esc(new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow'}).format(new Date(d.created_at)))}</div>`:''}
     <button class="crm-card-title" title="${esc(d.title)}" data-open-deal="${esc(d.id)}">${esc(d.title)}</button>
     <div class="crm-card-owner" title="${esc(userName(d.responsible_id)||'Без ответственного')}">${esc(userName(d.responsible_id)||'Без ответственного')}</div>
     <div class="crm-card-money" title="${d.paid===null?'Оплата не указана':esc(`Оплачено: ${crmMoney(d.paid)} · Остаток: ${crmMoney(Math.max(0,d.budget-d.paid))}`)}">${crmMoney(d.budget)}</div>
+    ${d.deadline_alert?`<div class="crm-deadline-label">${esc(d.deadline_alert.label)} · ${esc(d.deadline_alert.due.split('-').reverse().join('.'))}</div>`:''}
     ${tasks.length?`<div class="crm-task-marker ${overdue?'overdue':''}">${overdue?'Просрочено · ':''}Задач: ${tasks.length}</div>`:''}
     ${d.tags?.length?`<div class="crm-tags">${d.tags.map(t=>`<span>${esc(t)}</span>`).join('')}</div>`:''}
     ${trash?`<button class="btn" data-restore-deal="${esc(d.id)}">Восстановить</button>`:''}</article>`;
@@ -48,7 +49,7 @@ function renderCrm(){
   const active=crm.deals.filter(d=>!['won','lost'].includes(d.stage));
   const month=crm.report?.month||new Date(Date.now()+10800000).toISOString().slice(0,7);
   const count=(direction)=>(crm.report?.rows||[]).find(r=>r.month===month&&r.direction===direction)?.count||0;
-  $('#view').innerHTML=`<div class="crm-summary crm-month-summary"><span><strong>${active.length}</strong> активных сделок</span><div class="crm-month-panel"><div class="crm-month-heading">Передано в работу · ${esc(month.split('-').reverse().join('.'))}<button class="btn" id="crm-report">По месяцам</button></div><div class="crm-month-metrics">${CRM_DIRECTIONS.map(([key,label])=>`<div><strong>${count(key)}</strong><span>${label}</span></div>`).join('')}</div><div class="hint">Без направления за месяц: ${count('')}${crm.report?.missingDate?` · Без даты передачи: ${crm.report.missingDate}`:''}</div></div></div>
+  $('#view').innerHTML=`<div class="crm-summary crm-month-summary"><span><strong>${active.length}</strong> активных сделок</span><div class="crm-month-panel"><div class="crm-month-heading">Передано в работу · ${esc(month.split('-').reverse().join('.'))}<span>${state.me.isManager?'<button class="btn" id="crm-mail-settings">Почта</button>':''} <button class="btn" id="crm-report">По месяцам</button></span></div><div class="crm-month-metrics">${CRM_DIRECTIONS.map(([key,label])=>`<div><strong>${count(key)}</strong><span>${label}</span></div>`).join('')}</div><div class="hint">${crm.report?.mailConfigured?'':'Почтовые напоминания не подключены · '}Без направления за месяц: ${count('')}${crm.report?.missingDate?` · Без даты передачи: ${crm.report.missingDate}`:''}</div></div></div>
     <div class="toolbar crm-toolbar"><div class="crm-tabs">${[['active','Воронка'],['tasks','Задачи'],['trash',`Отстойник (${crm.trash.length+crm.deals.filter(d=>d.stage==='lost').length})`],['won',`Успешно завершённые (${crm.deals.filter(d=>d.stage==='won').length})`]].map(([k,l])=>`<button class="btn ${crm.mode===k?'primary':''}" data-crm-mode="${k}">${l}</button>`).join('')}</div>
     <select id="crm-responsible" aria-label="Ответственный"><option value="">Все ответственные</option>${state.users.map(u=>`<option value="${esc(u.id)}" ${crm.responsible===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select>
     <span class="spacer"></span><button class="btn primary" id="crm-add">Новая сделка</button></div>
@@ -61,6 +62,7 @@ function renderCrm(){
   $('#crm-responsible').onchange=e=>{crm.responsible=e.target.value;renderCrm();};
   $('#crm-add').onclick=()=>crmEdit();
   $('#crm-report').onclick=crmReport;
+  if($('#crm-mail-settings'))$('#crm-mail-settings').onclick=crmMailSettings;
   const openDeal=id=>crmEdit([...crm.deals,...crm.trash].find(d=>d.id===id));
   document.querySelectorAll('[data-open-deal]').forEach(b=>{
     if(!b.closest('.crm-card'))b.onclick=()=>openDeal(b.dataset.openDeal);
@@ -139,11 +141,11 @@ function crmEdit(original){
     ${crmField('Стоимость работ, ₽','budget',d.budget,'number',true)}${crmField('Пошлины, ₽','duties',d.duties||0,'number')}
     ${crmField('Оплачено за работы, ₽ · пусто = неизвестно','paid',d.paid??'','number')}<label class="crm-field">Услуга<input name="service" list="crm-service-list" value="${esc(d.service||'')}" placeholder="Выберите или введите своё название" autocomplete="off"><datalist id="crm-service-list">${[...new Set([...CRM_SERVICE_SUGGESTIONS,...crm.deals.map(x=>x.service).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'ru')).map(name=>`<option value="${esc(name)}"></option>`).join('')}</datalist></label>
     ${crmSelect('Направление услуги','direction',d.direction||'',[['','— Не указано'],...CRM_DIRECTIONS])}${crmField('Дата первой передачи в работу','work_started_on',d.work_started_on||'','date')}<p class="hint">Дата заполняется при первом переводе в работу. Для старых сделок укажите её вручную.</p>${crmField('Источник','source',d.source)}${crmField('Теги через запятую','tags',(d.tags||[]).join(', '))}
-    ${crmSelect('Исполнитель','executor_id',d.executor_id||'',crmUsers())}${crmField('Дата окончания','deadline',d.deadline?.slice(0,10),'date')}
+    ${d.paid_on?`<p class="hint">Запуск по оплате: ${esc(d.paid_on.split('-').reverse().join('.'))} · ${d.work_days} рабочих дней</p>`:''}${crmSelect('Исполнитель','executor_id',d.executor_id||'',crmUsers())}${crmField('Дата окончания','deadline',d.deadline?.slice(0,10),'date')}
     </div><h3>Контакт</h3><div class="crm-form-grid">${[['name','Имя'],['email','Email'],['phone','Телефон'],['telegram','Telegram'],['position','Должность']].map(([k,l])=>crmField(l,'contact_'+k,contact[k]||'',k==='email'?'email':'text')).join('')}</div>
     ${contact.company?`<p class="hint">Компания контакта в amoCRM: ${esc(contact.company)}</p>`:''}
     <h3>Примечания</h3><div class="crm-notes">${(d.notes||[]).map(n=>`<p>${esc(typeof n==='string'?n:n.text)}</p>`).join('')||'<p class="hint">Примечаний пока нет</p>'}</div><label class="crm-field">Добавить примечание<textarea name="new_note" rows="3"></textarea></label>
-    ${d.id?`<h3>Задачи</h3>${(d.tasks||[]).map(t=>`<div class="crm-task-line"><div><button type="button" class="crm-card-title" data-edit-task="${esc(t.id)}">${esc(t.title)}</button><div class="hint">${esc(userName(t.assigned_to)||'Без ответственного')} · ${esc(crmDT(t.due_at))} МСК · ${t.status==='done'?'Выполнено':'Не выполнено'}</div></div>${t.status==='open'?`<button class="btn" type="button" data-edit-complete="${esc(t.id)}">Выполнено</button>`:''}</div>`).join('')||'<p class="hint">Задач пока нет</p>'}<div class="crm-editor-actions"><button type="button" class="btn" id="crm-task-add">Добавить задачу</button><button type="button" class="btn" id="crm-client-open">Карточка клиента →</button><button type="button" class="btn" id="crm-upsell-add">Доп. продажа</button><button type="button" class="btn danger" id="crm-deal-delete">В отстойник</button></div>`:''}`;
+    ${d.id?`<h3>Задачи</h3>${(d.tasks||[]).map(t=>`<div class="crm-task-line"><div><button type="button" class="crm-card-title" data-edit-task="${esc(t.id)}">${esc(t.title)}</button><div class="hint">${esc(userName(t.assigned_to)||'Без ответственного')} · ${esc(crmDT(t.due_at))} МСК · ${t.status==='done'?'Выполнено':'Не выполнено'}</div></div>${t.status==='open'?`<button class="btn" type="button" data-edit-complete="${esc(t.id)}">Выполнено</button>`:''}</div>`).join('')||'<p class="hint">Задач пока нет</p>'}<div class="crm-editor-actions">${!d.paid_on&&!['won','lost','act_ready','act_sent'].includes(d.stage)?'<button type="button" class="btn primary" id="crm-payment">Оплата получена</button>':''}<button type="button" class="btn" id="crm-task-add">Добавить задачу</button><button type="button" class="btn" id="crm-client-open">Карточка клиента →</button><button type="button" class="btn" id="crm-upsell-add">Доп. продажа</button><button type="button" class="btn danger" id="crm-deal-delete">В отстойник</button></div>`:''}`;
   const el=crmDialog(d.id?'Карточка сделки':'Новая сделка',body,async f=>{
     const client=crm.clients.find(c=>c.name===f.client_name.trim());if(!client)throw Error('Выберите существующего клиента из списка. Нового клиента сначала создайте в «Клиенты 360».');
     const patch={title:f.title,client_id:client.id,responsible_id:f.responsible_id,stage:f.stage,budget:Number(f.budget),duties:Number(f.duties||0),paid:f.paid===''?null:Number(f.paid),service:f.service,direction:f.direction,work_started_on:f.work_started_on,source:f.source,tags:f.tags.split(',').map(x=>x.trim()).filter(Boolean),executor_id:f.executor_id||null,deadline:f.deadline,contact:{...contact,...Object.fromEntries(['name','email','phone','telegram','position'].map(k=>[k,f['contact_'+k]]))}};
@@ -154,6 +156,7 @@ function crmEdit(original){
   });
   if(!d.id){el.querySelector('[name="client_name"]').onchange=e=>{const c=crm.clients.find(x=>x.name===e.target.value);const t=c?.contacts?.[0];if(t)for(const k of ['name','email','phone','telegram']){const input=el.querySelector(`[name="contact_${k}"]`);if(!input.value)input.value=t[k]||'';}};}
   if(d.id){
+    if($('#crm-payment'))$('#crm-payment').onclick=()=>{if(confirm('Перейти к отметке оплаты? Несохранённые изменения карточки не сохранятся.'))crmPayment(d);};
     $('#crm-client-open').onclick=async()=>{crmClose();state.route='clients';history.replaceState(null,'','#/clients');state.clientView=d.client_id;state.clientDetail=null;renderAll();await loadClientDetail(d.client_id);};
     $('#crm-deal-delete').onclick=()=>{if(confirm('Переместить сделку в отстойник? Её можно будет восстановить.')){crmClose();crmMutation('/crm/deals/'+d.id,'DELETE',{revision:d.revision});}};
     el.querySelectorAll('[data-edit-task]').forEach(b=>b.onclick=()=>{if(confirm('Изменить задачу? Несохранённые изменения карточки не сохранятся.'))crmTaskForm(d,d.tasks.find(t=>t.id===b.dataset.editTask));});
@@ -172,4 +175,18 @@ function crmTaskForm(d,t=null){
 }
 async function openCrmDealById(id){
   try{crmClose();state.route='crm';history.replaceState(null,'','#/crm');await loadCrm();renderAll();const d=crm.deals.find(x=>x.id===id);if(d)crmEdit(d);else toast('Сделка не найдена или перемещена в корзину',true);}catch(e){toast(e.message,true);}
+}
+
+function crmPayment(d){
+ const today=new Date(Date.now()+10800000).toISOString().slice(0,10);
+ const body=crmField('Дата оплаты','paid_on',today,'date',true)+crmField('Всего оплачено за работы, ₽','paid',d.paid??d.budget,'number',true)+crmField('Срок выполнения · рабочие дни','work_days','','number',true)+crmSelect('Ответственный · получатель письма','responsible_id',d.responsible_id||state.me.id,crmUsers(),true)+crmSelect('Исполнитель','executor_id',d.executor_id||'',crmUsers(),true)+'<label class="crm-check"><input type="checkbox" name="allow_advance">Начать работу по полученному авансу</label><p class="hint">Отсчёт со следующего рабочего дня после оплаты, с учётом праздников РФ. За 3 рабочих дня до сдачи — красная рамка и письмо ответственному.</p><p id="crm-payment-preview" class="hint"></p>';
+ const el=crmDialog('Оплата получена',body,async f=>{
+   crm.busy=true;try{await api('/crm/deals/'+d.id+'/payment',{method:'POST',body:jbody({revision:d.revision,paid_on:f.paid_on,work_days:Number(f.work_days),paid:Number(f.paid),allow_advance:f.allow_advance==='on',executor_id:f.executor_id,responsible_id:f.responsible_id})});crmClose();await loadCrm();renderCrm();toast('Оплата отмечена, срок рассчитан');}finally{crm.busy=false;}
+ },'Подтвердить и начать работу');
+ const days=el.querySelector('[name=work_days]');days.min=1;days.max=500;days.step=1;el.querySelector('[name=paid_on]').max=today;
+ let version=0;const preview=async()=>{const request=++version;const date=el.querySelector('[name=paid_on]').value;if(!days.value||!date)return;try{const result=await api('/crm/deadline?date='+encodeURIComponent(date)+'&days='+encodeURIComponent(days.value));if(request===version)el.querySelector('#crm-payment-preview').textContent='Дата сдачи: '+result.deadline.split('-').reverse().join('.');}catch(e){if(request===version)el.querySelector('#crm-payment-preview').textContent=e.message;}};
+ days.oninput=preview;el.querySelector('[name=paid_on]').onchange=preview;
+}
+async function crmMailSettings(){
+ try{const status=await api('/crm/mail');crmDialog('Почтовые напоминания',`<p class="hint">${status.configured?'Настройки сохранены. Новый пароль заменит сохранённый.':'Отправка ещё не подключена.'}${status.failed?` Ошибок отправки: ${status.failed}. Проверьте пароль приложения; портал повторяет попытку через час.`:''} Пароль приложения хранится только на сервере. Обычный пароль почты не нужен.</p>${crmField('Отправитель Mail.ru','from',status.from,'email',true)}${crmField('Пароль приложения Mail.ru','password','','password',true)}<p class="hint">Письма отправляются ответственному с 09:00 до 19:00 МСК. При переносе срока или смене ответственного новое напоминание будет отправлено отдельно.</p>`,async f=>{crm.busy=true;try{await api('/crm/mail',{method:'POST',body:jbody(f)});crmClose();await loadCrm();renderCrm();toast('Настройки почты сохранены');}finally{crm.busy=false;}});}catch(e){toast(e.message,true);}
 }

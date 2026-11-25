@@ -563,7 +563,9 @@ function go(r){
   refresh().catch(e=> toast(e.message, true));
 }
 window.addEventListener('hashchange', ()=>{
-  const r = location.hash.replace('#/','') || 'trademarks';
+  const hash=location.hash.replace('#/','');const r=hash.split('?')[0]||'trademarks';
+  const deal=new URLSearchParams(hash.split('?')[1]||'').get('deal');
+  if(r==='crm'&&deal&&!$('#app').hidden){openCrmDealById(deal);return;}
   if(r!==state.route && ROUTES[r]){ go(r); }
 });
 
@@ -1914,9 +1916,11 @@ async function startApp(session){
   $('#login').hidden = true; $('#pwchange').hidden = true; $('#app').hidden = false;
   $('#meavatar').textContent = state.byId[state.me.id]?.init || '—';
   $('#mename').textContent = state.me.name;
-  const r = location.hash.replace('#/','');
+  const hash=location.hash.replace('#/','');const r=hash.split('?')[0];
+  const deal=new URLSearchParams(hash.split('?')[1]||'').get('deal');
   state.route = ROUTES[r] ? r : 'trademarks';
   await refresh();
+  if(r==='crm'&&deal)await openCrmDealById(deal);
 }
 
 async function boot(){

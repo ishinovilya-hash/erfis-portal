@@ -186,3 +186,19 @@ test('historical work dates stay unknown until supplied and directions can be fi
   const report=(await call('GET','/api/crm/report')).data;
   assert.equal(report.missingDate,0);assert.equal(report.rows[0].direction,'mincifry');assert.equal(report.rows[0].count,1);
 });
+
+test('payment starts work atomically, computes working days and never resets first date',async t=>{
+ const {db,create,call,patch}=fixture(t);let d=await create({budget:100,direction:'patents'});
+ const body={revision:d.revision,paid_on:'2026-11-20',paid:100,work_days:5,executor_id:'u2',responsible_id:'u1'};
+ assert.equal((await call('POST','/api/crm/deals/:id/payment',{...body,paid:10},d.id)).status,400);
+ assert.equal((await call('POST','/api/crm/deals/:id/payment',{...body,work_days:1.5},d.id)).status,400);
+ assert.equal(db.prepare('SELECT count(*) n FROM crm_work_register').get().n,0);
+ let r=await call('POST','/api/crm/deals/:id/payment',body,d.id);assert.equal(r.status,200,JSON.stringify(r));d=r.data.deal;
+ assert.equal(d.stage,'work');assert.equal(d.deadline,'2026-11-27');assert.equal(d.work_started_on,'2026-11-20');assert.equal(d.paid_on,'2026-11-20');
+ assert.equal(d.tasks.find(t=>t.stage==='work').due_at,'2026-11-27');
+ assert.equal((await call('POST','/api/crm/deals/:id/payment',{...body,revision:d.revision},d.id)).status,400);
+ assert.equal((await patch(d,{paid_on:'2026-11-21'})).status,400);
+ const advanced=await create({budget:100});r=await call('POST','/api/crm/deals/:id/payment',{...body,revision:advanced.revision,paid:10,allow_advance:true},advanced.id);assert.equal(r.status,200);
+ assert.equal((await call('GET','/api/crm/mail')).status,403);
+ assert.equal((await call('POST','/api/crm/mail',{from:'client@erfis.ru',password:'test'})).status,403);
+});

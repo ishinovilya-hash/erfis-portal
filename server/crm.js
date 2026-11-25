@@ -1,3 +1,5 @@
+import {addWorkdays,deadlineAlert} from './work-calendar.js';
+import {initCrmMail,mailStatus,saveMailConfig} from './crm-mail.js';
 import { randomUUID } from 'node:crypto';
 
 export const CRM_DIRECTIONS = ['', 'patents', 'trademarks', 'mincifry', 'software'];
@@ -52,6 +54,9 @@ export function initCrm(db) {
     const columns=new Set(db.prepare('PRAGMA table_info(crm_deals)').all().map(c=>c.name));
     if(!columns.has('direction'))db.exec("ALTER TABLE crm_deals ADD COLUMN direction TEXT NOT NULL DEFAULT ''");
     if(!columns.has('work_started_on'))db.exec("ALTER TABLE crm_deals ADD COLUMN work_started_on TEXT NOT NULL DEFAULT ''");
+    if(!columns.has('paid_on'))db.exec("ALTER TABLE crm_deals ADD COLUMN paid_on TEXT NOT NULL DEFAULT ''");
+    if(!columns.has('work_days'))db.exec("ALTER TABLE crm_deals ADD COLUMN work_days INTEGER NOT NULL DEFAULT 0");
+    initCrmMail(db);
     // Independent from deal deletion: a recorded start remains in historical totals.
     db.exec(`CREATE TABLE IF NOT EXISTS crm_work_register (
       deal_id TEXT PRIMARY KEY, direction TEXT NOT NULL, started_on TEXT NOT NULL,
@@ -83,14 +88,14 @@ function rawDeal(db,id) {
   return row;
 }
 function dealApi(db,row) {
-  return {...row, allow_advance:!!row.allow_advance, tags:JSON.parse(row.tags), contact:JSON.parse(row.contact),
+  return {...row, deadline_alert:deadlineAlert(row), allow_advance:!!row.allow_advance, tags:JSON.parse(row.tags), contact:JSON.parse(row.contact),
     tasks:db.prepare('SELECT * FROM crm_tasks WHERE deal_id=? ORDER BY created_at,id').all(row.id),
     notes:db.prepare('SELECT * FROM crm_notes WHERE deal_id=? ORDER BY rowid').all(row.id)};
 }
-const fields = ['direction','work_started_on','client_id','title','responsible_id','executor_id','service','source','tags','budget','duties','paid','allow_advance','deadline','next_action','next_contact','contact','stage','source_id','lost_reason','parent_deal_id'];
+const fields = ['paid_on','work_days','direction','work_started_on','client_id','title','responsible_id','executor_id','service','source','tags','budget','duties','paid','allow_advance','deadline','next_action','next_contact','contact','stage','source_id','lost_reason','parent_deal_id'];
 function values(db,b,old) {
   if (!object(b)) fail('Ожидается объект');
-  const d = {...{direction:'',work_started_on:'',responsible_id:null,executor_id:null,service:'',source:'',tags:[],budget:0,duties:0,paid:null,allow_advance:false,deadline:'',next_action:'',next_contact:'',contact:{},stage:'new',source_id:null,lost_reason:'',parent_deal_id:null},
+  const d = {...{paid_on:'',work_days:0,direction:'',work_started_on:'',responsible_id:null,executor_id:null,service:'',source:'',tags:[],budget:0,duties:0,paid:null,allow_advance:false,deadline:'',next_action:'',next_contact:'',contact:{},stage:'new',source_id:null,lost_reason:'',parent_deal_id:null},
     ...(old ? {...old,tags:JSON.parse(old.tags),contact:JSON.parse(old.contact),allow_advance:!!old.allow_advance}:{} )};
   for (const key of fields) if(own(b,key)) d[key]=b[key];
   d.client_id=reference(db,'counterparties',d.client_id,'client_id',true);
@@ -103,6 +108,13 @@ function values(db,b,old) {
   }
   for(const key of ['title','service','source','next_action','lost_reason']) d[key]=text(d[key],key);
   if(!d.title)fail('Укажите название');
+  d.paid_on=date(d.paid_on,'paid_on');
+  if(d.paid_on&&(!/^\d{4}-\d{2}-\d{2}$/.test(d.paid_on)||d.paid_on>moscowDay()))fail('Неверная дата оплаты');
+  if(!Number.isInteger(d.work_days)||d.work_days<0||d.work_days>500)fail('Срок: от 1 до 500 рабочих дней');
+  if(old?.paid_on&&d.paid_on!==old.paid_on)fail('Дата запуска по оплате уже сохранена. Для изменения срока используйте дату окончания');
+  if(d.work_days&&!d.paid_on)fail('Укажите дату оплаты');
+  if(d.paid_on&&d.work_days&&(!old?.paid_on||old.work_days!==d.work_days))d.deadline=addWorkdays(d.paid_on,d.work_days);
+
   if(!CRM_DIRECTIONS.includes(d.direction))fail('Неверное направление услуги');
   d.work_started_on=date(d.work_started_on,'work_started_on');
   if(d.work_started_on && (!/^\d{4}-\d{2}-\d{2}$/.test(d.work_started_on)||d.work_started_on>moscowDay()))fail('Дата передачи в работу не может быть будущей');
@@ -162,7 +174,7 @@ function save(db,b,id=null,historical=false) {
   const d=values(db,b,old),at=now(),cid=id||'cd-'+randomUUID();
   // Existing historical rows can be edited without retroactively imposing entry gates.
   if(!historical && (!old||old.stage!==d.stage))gate(d);
-  if(!historical && d.stage==='work' && old?.stage!=='work' && !d.work_started_on)d.work_started_on=moscowDay();
+  if(!historical && d.stage==='work' && old?.stage!=='work' && !d.work_started_on)d.work_started_on=d.paid_on||moscowDay();
   if(old) db.prepare(`UPDATE crm_deals SET ${fields.map(k=>k+'=?').join(',')},revision=revision+1,updated_at=? WHERE id=?`).run(...fields.map(k=>d[k]),at,cid);
   else {
     const created=historical&&b.created_at?date(b.created_at,'created_at'):at;
@@ -215,8 +227,28 @@ export function registerCrmRoutes({route,db,json,readBody,currentUser,logActivit
     }
   });
   const log=(kind,deal,user)=>logActivity(kind,deal?{id:deal.id,type:'crm_deal'}:null,deal?deal.title:'Очищена корзина CRM',user.id);
+  register('GET','/api/crm/deadline',(_b,_p,url)=>{
+    const days=Number(url.searchParams.get('days'));if(!Number.isInteger(days)||days<1||days>500)fail('Укажите от 1 до 500 рабочих дней');
+    return {deadline:addWorkdays(url.searchParams.get('date')||'',days)};
+  });
+  register('GET','/api/crm/mail',(_b,_p,_url,user)=>{if(!user.is_manager)fail('Только руководителю',403);return {...mailStatus(),failed:db.prepare("SELECT count(*) n FROM crm_mail_deliveries WHERE status='failed'").get().n};});
+  register('POST','/api/crm/mail',(b,_p,_url,user)=>{if(!user.is_manager)fail('Только руководителю',403);return saveMailConfig(b);});
+  register('POST','/api/crm/deals/:id/payment',(b,p,_url,user)=>{
+    const old=rawDeal(db,p.id);revision(b.revision,old);
+    if(old.deleted_at||terminal(old.stage)||['act_ready','act_sent'].includes(old.stage))fail('Работа уже завершена или сделка в отстойнике');
+    if(old.paid_on)fail('Оплата для запуска уже отмечена. Измените сумму или срок в карточке');
+    if(!Number.isInteger(b.work_days)||b.work_days<1||b.work_days>500)fail('Укажите срок в рабочих днях');
+    const paymentDate=b.paid_on||moscowDay();
+    const deadline=addWorkdays(paymentDate,b.work_days);
+    const patch={revision:b.revision,stage:'work',paid_on:paymentDate,work_days:b.work_days,paid:b.paid,allow_advance:b.allow_advance===true,
+      executor_id:b.executor_id,responsible_id:b.responsible_id||old.responsible_id,deadline,
+      work_started_on:old.work_started_on||paymentDate};
+    if(!patch.responsible_id)fail('Укажите ответственного для напоминаний');
+    gate({...old,...patch});
+    const deal=save(db,patch,old.id);log('crm_payment',deal,user);return {deal};
+  });
   register('GET','/api/crm/report',()=>({
-    month:moscowDay().slice(0,7),
+    month:moscowDay().slice(0,7),mailConfigured:mailStatus().configured,
     rows:db.prepare("SELECT substr(started_on,1,7) month,direction,count(*) count FROM crm_work_register GROUP BY month,direction ORDER BY month DESC").all(),
     missingDate:db.prepare("SELECT count(*) n FROM crm_deals WHERE deleted_at IS NULL AND stage IN ('work','act_ready','act_sent','won') AND work_started_on='' ").get().n
   }));
