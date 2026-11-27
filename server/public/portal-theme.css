@@ -131,7 +131,7 @@ input:not([type="checkbox"]):not([type="radio"]),select,textarea{accent-color:va
 .crm-toolbar select{background:var(--surface);border-radius:7px;padding:8px 10px;font-size:12px;min-height:38px;max-width:220px}
 .crm-tabs .btn{background:transparent;border-color:transparent;color:var(--ink-2);padding:8px 12px;box-shadow:none}
 .crm-tabs .btn.primary{background:var(--accent-soft);color:var(--accent)}
-.crm-board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);height:auto;min-height:0;gap:10px;padding:0 0 14px;align-items:start;overflow:visible}
+.crm-board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);height:auto;min-height:0;gap:10px;padding:0 0 14px;align-items:stretch;overflow:visible}
 .crm-column{--stage-color:var(--blue);min-width:0;flex-basis:286px;background:transparent;border:0;border-radius:0;padding:0}
 .crm-column[data-stage="offer"]{--stage-color:var(--purple)}.crm-column[data-stage="contract"]{--stage-color:var(--orange)}.crm-column[data-stage="work"]{--stage-color:var(--blue)}.crm-column[data-stage="act_ready"]{--stage-color:var(--pink)}.crm-column[data-stage="act_sent"],.crm-column[data-stage="won"]{--stage-color:var(--green)}.crm-column[data-stage="lost"]{--stage-color:var(--crit)}
 .crm-column header{padding:10px;height:88px;background:var(--surface);border-top:3px solid var(--stage-color);border-radius:9px;margin-bottom:10px;box-shadow:var(--shadow-sm)}
@@ -243,3 +243,7 @@ input:not([type="checkbox"]):not([type="radio"]),select,textarea{accent-color:va
 @media(max-width:700px){.crm-deal-layout{grid-template-columns:1fr;gap:16px}.crm-deal-fields{border-right:0;padding-right:0;border-bottom:1px solid var(--hairline-2)}.crm-deal-dialog .crm-dialog-content{padding:0 14px 14px}.crm-deal-dialog .crm-editor-actions{margin:0 -14px;padding:10px 14px}.crm-deal-dialog .crm-editor-actions .btn{flex:1 1 auto}.crm-deal-activity{padding-top:0}}
 
 @media(min-width:1200px){.crm-month-metrics{grid-template-columns:repeat(7,minmax(0,1fr))}}
+
+/* Every stage accepts drops through the full board height, including empty space. */
+.crm-board>.crm-column{min-height:calc(100vh - 320px)}
+.crm-board>.crm-column>.crm-column-cards{flex:1}
