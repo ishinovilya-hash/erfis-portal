@@ -247,3 +247,8 @@ input:not([type="checkbox"]):not([type="radio"]),select,textarea{accent-color:va
 /* Every stage accepts drops through the full board height, including empty space. */
 .crm-board>.crm-column{min-height:calc(100vh - 320px)}
 .crm-board>.crm-column>.crm-column-cards{flex:1}
+
+.crm-board>.crm-column>header{position:relative;z-index:10;box-shadow:0 4px 10px #0002}
+.crm-back-top{position:fixed;right:24px;bottom:24px;z-index:25;box-shadow:var(--shadow-lg);padding:10px 16px}
+.crm-back-top[hidden]{display:none}
+@media(max-width:700px){.crm-back-top{right:14px;bottom:14px}}

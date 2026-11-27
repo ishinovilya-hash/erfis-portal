@@ -39,6 +39,22 @@ function crmCard(d,trash=false){
     ${tasks.length?`<div class="crm-task-marker ${overdue?'overdue':''}">${overdue?'Просрочено · ':''}Задач: ${tasks.length}</div>`:''}
     ${trash?`<button class="btn" data-restore-deal="${esc(d.id)}">Восстановить</button>`:''}</article>`;
 }
+let crmScrollFrame=0;
+function crmUpdateScroll(){
+  const button=document.querySelector('#crm-back-top');
+  if(button)button.hidden=window.scrollY<300||!!crm.drag;
+  const board=document.querySelector('.crm-board');if(!board)return;
+  const bar=document.querySelector('.topbar');
+  const top=Math.max(8,(bar?.getBoundingClientRect().bottom||0)+8);
+  const rect=board.getBoundingClientRect();
+  board.querySelectorAll('.crm-column>header').forEach(header=>{
+    const offset=Math.max(0,Math.min(top-rect.top,header.parentElement.offsetHeight-header.offsetHeight));
+    header.style.transform=`translateY(${offset}px)`;
+  });
+}
+function crmScheduleScroll(){if(!crmScrollFrame)crmScrollFrame=requestAnimationFrame(()=>{crmScrollFrame=0;crmUpdateScroll();});}
+window.addEventListener('scroll',crmScheduleScroll,{passive:true});
+window.addEventListener('resize',crmScheduleScroll);
 function renderCrm(){
   if(!crm.deals){$('#view').innerHTML='<div class="pageloader">Загрузка CRM…</div>';return;}
   const rows=(crm.mode==='trash'?crm.trash:crm.deals).filter(crmVisible);
@@ -55,10 +71,12 @@ function renderCrm(){
     crm.mode==='won'?`<div class="crm-card-grid">${rows.filter(d=>d.stage==='won').map(d=>crmCard(d)).join('')||'<div class="empty">Успешно завершённых сделок пока нет</div>'}</div>`:
     crm.mode==='tasks'?`<div class="listcard">${tasks.map(t=>`<div class="lrow"><div class="lr-main"><button class="crm-card-title" data-open-deal="${esc(t.deal.id)}">${esc(t.title)}</button><div class="lr-s">${esc(t.deal.title)} · ${esc(userName(t.assigned_to)||'Без ответственного')}</div><div class="${t.due_at&&new Date(t.due_at)<new Date()?'overdue':'hint'}">${esc(crmDT(t.due_at))} МСК</div></div><button class="btn" data-task-done="${esc(t.id)}" data-task-deal="${esc(t.deal.id)}">Выполнено</button></div>`).join('')||'<div class="empty">Невыполненных задач нет</div>'}</div>`:
     `<div class="crm-board">${stages.map(s=>{const list=rows.filter(d=>d.stage===s);return `<section class="crm-column" data-stage="${s}"><header><h3>${CRM_LABELS[s]}</h3><span>${list.length} · ${crmMoney(list.reduce((n,d)=>n+d.budget,0))}</span></header><div class="crm-column-cards">${list.map(d=>crmCard(d)).join('')||'<div class="crm-column-empty">Перетащите сделку сюда</div>'}</div></section>`;}).join('')}</div>`}
-    <div id="crm-drop-actions" class="crm-drop-actions" hidden><div id="crm-drop-trash" class="crm-drop-trash">Отстойник</div><div id="crm-drop-won" class="crm-drop-won">Успешно завершена</div></div>`;
+    <button type="button" id="crm-back-top" class="btn primary crm-back-top" hidden aria-label="Вернуться наверх">↑ Вверх</button><div id="crm-drop-actions" class="crm-drop-actions" hidden><div id="crm-drop-trash" class="crm-drop-trash">Отстойник</div><div id="crm-drop-won" class="crm-drop-won">Успешно завершена</div></div>`;
   document.querySelectorAll('[data-crm-mode]').forEach(b=>b.onclick=()=>{crm.mode=b.dataset.crmMode;renderCrm();});
   $('#crm-responsible').onchange=e=>{crm.responsible=e.target.value;renderCrm();};
   $('#crm-add').onclick=()=>crmEdit();
+  $('#crm-back-top').onclick=()=>window.scrollTo({top:0,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+  crmScheduleScroll();
   $('#crm-report').onclick=crmReport;
   if($('#crm-mail-settings'))$('#crm-mail-settings').onclick=crmMailSettings;
   const openDeal=id=>crmEdit([...crm.deals,...crm.trash].find(d=>d.id===id));
@@ -73,8 +91,8 @@ function renderCrm(){
   document.querySelectorAll('[data-task-done]').forEach(b=>b.onclick=()=>crmCompleteTask(b.dataset.taskDeal,b.dataset.taskDone));
   if($('#crm-empty'))$('#crm-empty').onclick=()=>{if(confirm(`Безвозвратно удалить ${crm.trash.length} сделок из отстойника вместе с их задачами и примечаниями?`))crmMutation('/crm/trash','DELETE',{deals:crm.trash.map(({id,revision})=>({id,revision}))});};
   document.querySelectorAll('.crm-card[draggable]').forEach(el=>{
-    el.ondragstart=e=>{const d=crm.deals.find(x=>x.id===el.dataset.deal);crm.drag={id:d.id,revision:d.revision};e.dataTransfer.setData('text/plain',d.id);e.dataTransfer.effectAllowed='move';$('#crm-drop-actions').hidden=false;};
-    el.ondragend=()=>{crm.drag=null;if($('#crm-drop-actions'))$('#crm-drop-actions').hidden=true;document.querySelectorAll('.crm-drop-over').forEach(x=>x.classList.remove('crm-drop-over'));};
+    el.ondragstart=e=>{const d=crm.deals.find(x=>x.id===el.dataset.deal);crm.drag={id:d.id,revision:d.revision};e.dataTransfer.setData('text/plain',d.id);e.dataTransfer.effectAllowed='move';$('#crm-drop-actions').hidden=false;$('#crm-back-top').hidden=true;};
+    el.ondragend=()=>{crm.drag=null;if($('#crm-drop-actions'))$('#crm-drop-actions').hidden=true;document.querySelectorAll('.crm-drop-over').forEach(x=>x.classList.remove('crm-drop-over'));crmScheduleScroll();};
   });
   const drop=(el,fn)=>{el.ondragover=e=>{if(crm.drag){e.preventDefault();e.dataTransfer.dropEffect='move';el.classList.add('crm-drop-over');}};el.ondragleave=()=>el.classList.remove('crm-drop-over');el.ondrop=e=>{e.preventDefault();el.classList.remove('crm-drop-over');const drag=crm.drag;crm.drag=null;$('#crm-drop-actions').hidden=true;if(drag)fn(drag);};};
   document.querySelectorAll('[data-stage]').forEach(el=>drop(el,drag=>{const d=crm.deals.find(x=>x.id===drag.id);if(d&&d.stage!==el.dataset.stage)crmWorkflow(d,{revision:drag.revision,stage:el.dataset.stage});}));
