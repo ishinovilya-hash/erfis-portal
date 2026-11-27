@@ -137,13 +137,12 @@ function crmWorkflow(d,b){
   let title,fields;
   if(stage==='new'){title='Свяжитесь с клиентом';fields=crmSelect('Ответственный','responsible_id',merged.responsible_id||state.me.id,crmUsers(),true)+crmField('Что сделать','next_action',merged.next_action||'Связаться с клиентом','text',true)+crmField('Когда связаться · МСК','next_contact',crmInputTime(merged.next_contact),'datetime-local',true);}
   else if(stage==='offer'){title='Когда связаться повторно?';fields=crmSelect('Ответственный','responsible_id',merged.responsible_id||state.me.id,crmUsers(),true)+crmField('Следующее действие','next_action',merged.next_action||'Уточнить решение по КП','text',true)+crmField('Дата и время · МСК','next_contact',crmInputTime(merged.next_contact),'datetime-local',true);}
-  else if(stage==='work'){title='Начните работу по сделке';fields=`<p class="hint">Стоимость работ: ${crmMoney(merged.budget)}. Передаём после полной оплаты; аванс отмечается отдельно.</p>`+crmSelect('Ответственный','responsible_id',merged.responsible_id||state.me.id,crmUsers(),true)+crmField('Срок выполнения','deadline',merged.deadline?.slice(0,10),'date',true)+crmField('Получено за работы, ₽','paid',merged.paid??'','number',true)+`<label class="crm-check"><input name="allow_advance" type="checkbox" ${merged.allow_advance?'checked':''}>Начать работу по авансу</label>`;}
+  else if(stage==='work'){return crmSave(d,b).catch(e=>toast(e.message,true));}
   else if(stage==='lost'){title='Почему сделка не состоялась?';fields=crmField('Причина отказа','lost_reason',merged.lost_reason||'','text',true);}
   else{return crmSave(d,b).catch(e=>toast(e.message,true));}
   crmDialog(title,fields,async f=>{
     const patch={...b};
     if(stage==='new'||stage==='offer'){Object.assign(patch,{responsible_id:f.responsible_id,next_action:f.next_action,next_contact:crmISO(f.next_contact),task:{title:f.next_action,assigned_to:f.responsible_id,due_at:crmISO(f.next_contact)}});}
-    if(stage==='work'){Object.assign(patch,{responsible_id:f.responsible_id,executor_id:f.responsible_id,deadline:f.deadline,paid:Number(f.paid),allow_advance:f.allow_advance==='on',task:{title:'Выполнить работу: '+merged.title,assigned_to:f.responsible_id,due_at:f.deadline}});if(patch.paid<merged.budget&&!(patch.allow_advance&&patch.paid>0))throw Error('Укажите полную оплату или отметьте начало по полученному авансу.');}
     if(stage==='lost')patch.lost_reason=f.lost_reason;
     await crmSave(d,patch);
   },d.id?'Перевести сделку':'Создать сделку');

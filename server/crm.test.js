@@ -51,8 +51,6 @@ test('stage transition gates and tasks commit together; failed notes/task roll b
   assert.equal(db.prepare('SELECT revision FROM crm_deals WHERE id=?').get(d.id).revision,1);
   d=(await patch(d,{stage:'offer',next_action:'Call',next_contact:'2026-12-01'})).data.deal;
   assert.equal(d.tasks.filter(x=>x.status==='open').length,2);assert.equal(d.tasks.find(x=>x.stage==='new').status,'open');
-  for(const body of [{paid:null},{paid:0,allow_advance:true},{paid:99},{paid:100,executor_id:null},{paid:100,deadline:''}])
-    assert.equal((await patch(d,{stage:'work',executor_id:'u2',deadline:'2026-12-02',...body})).status,400);
   const count=db.prepare('SELECT count(*) n FROM crm_tasks').get().n;
   assert.equal((await patch(d,{stage:'work',paid:100,executor_id:'u2',deadline:'2026-12-02',notes:['rollback'],task:{assigned_to:'missing'}})).status,400);
   assert.equal(db.prepare('SELECT count(*) n FROM crm_notes').get().n,0);assert.equal(db.prepare('SELECT count(*) n FROM crm_tasks').get().n,count);
@@ -158,7 +156,7 @@ test('monthly work register preserves first start, corrections and history after
   const work={stage:'work',executor_id:'u2',deadline:'2026-12-02',paid:0};
   assert.equal((await patch(d,{...work,task:{assigned_to:'missing'}})).status,400);
   assert.equal(db.prepare('SELECT count(*) n FROM crm_work_register').get().n,0);
-  d=(await patch(d,work)).data.deal;
+  d=(await call('POST','/api/crm/deals/:id/payment',{revision:d.revision,paid:0,work_days:5,executor_id:'u2',responsible_id:'u1'},d.id)).data.deal;
   const started=d.work_started_on;assert.match(started,/^\d{4}-\d{2}-\d{2}$/);
   d=(await patch(d,{stage:'contract'})).data.deal;
   d=(await patch(d,work)).data.deal;assert.equal(d.work_started_on,started);
@@ -232,4 +230,11 @@ test('monthly report is restricted to manager while employees retain deal access
  assert.equal(denied.status,403);assert.equal(denied.data.rows,undefined);
  assert.equal((await call('GET','/api/crm/report')).status,200);
  assert.equal((await call('GET','/api/crm/deals',{},null,'','employee')).status,200);
+});
+
+test('moving into work does not require payment details or imply a payment start',async t=>{
+ const {create,patch,db}=fixture(t);let d=await create({stage:'contract',budget:100,work_days:10});
+ d=(await patch(d,{stage:'work'})).data.deal;
+ assert.equal(d.stage,'work');assert.equal(d.paid,null);assert.equal(d.paid_on,'');assert.equal(d.deadline,'');assert.equal(d.work_started_on,'');
+ assert.equal(db.prepare('SELECT count(*) n FROM crm_work_register').get().n,0);
 });

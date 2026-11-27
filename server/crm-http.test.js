@@ -32,9 +32,10 @@ test('CRM routes require login and expose deals in the linked client card', asyn
     assert.equal(detail.data.deals.length,1);
     assert.equal(detail.data.deals[0].id,deal.id);
     assert.equal(detail.data.objects.trademark.length,0);
-    const rejected=await req('/crm/deals/'+deal.id,'PATCH',{revision:deal.revision,stage:'work',executor_id:'u_petrov',deadline:'2026-12-20',paid:0});
-    assert.equal(rejected.status,400);
-    assert.equal((await req('/clients/'+client.id)).data.deals[0].stage,'new');
+    const moved=await req('/crm/deals/'+deal.id,'PATCH',{revision:deal.revision,stage:'work'});
+    assert.equal(moved.status,200);
+    assert.equal(moved.data.deal.paid_on,'');
+    assert.equal((await req('/clients/'+client.id)).data.deals[0].stage,'work');
     for(const file of ['/crm.js','/crm.css']){
       const r=await fetch('http://127.0.0.1:18761'+file);
       assert.equal(r.status,200,file);
