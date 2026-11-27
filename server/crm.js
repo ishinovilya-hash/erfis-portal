@@ -262,6 +262,23 @@ export function registerCrmRoutes({route,db,json,readBody,currentUser,logActivit
     return {deals:db.prepare(sql+' ORDER BY updated_at DESC,id').all(...args).map(row=>dealApi(db,row))};
   });
   register('POST','/api/crm/deals',(b,_p,_url,user)=>{const deal=save(db,b);log('crm_create',deal,user);return {deal};});
+  register('POST','/api/crm/deals/:id/archive',(b,p,_url,user)=>{
+    const old=rawDeal(db,p.id);revision(b.revision,old);if(old.deleted_at)fail('Сделка уже в отстойнике',409);
+    const reason=old.stage==='new'?'':text(b.reason??'','reason');
+    if(old.stage!=='new'&&!reason)fail('Укажите причину отказа');
+    db.prepare('UPDATE crm_deals SET lost_reason=?,deleted_at=?,revision=revision+1,updated_at=? WHERE id=?').run(reason,now(),now(),p.id);
+    const deal=dealApi(db,rawDeal(db,p.id));log('crm_refused',deal,user);return {deal};
+  });
+  register('POST','/api/crm/deals/:id/purge-new',(b,p,_url,user)=>{
+    const old=rawDeal(db,p.id);revision(b.revision,old);
+    if(old.stage!=='new'||old.deleted_at)fail('Безвозвратно удалить здесь можно только новый лид',409);
+    if(db.prepare('SELECT deal_id FROM crm_work_register WHERE deal_id=?').get(p.id))fail('У сделки есть история начала работ; переместите её в отстойник',409);
+    db.prepare('UPDATE crm_deals SET parent_deal_id=NULL,revision=revision+1,updated_at=? WHERE parent_deal_id=?').run(now(),p.id);
+    db.prepare('DELETE FROM crm_tasks WHERE deal_id=?').run(p.id);
+    db.prepare('DELETE FROM crm_notes WHERE deal_id=?').run(p.id);
+    db.prepare('DELETE FROM crm_deals WHERE id=?').run(p.id);
+    log('crm_purge',null,user);return {deleted:1};
+  });
   register('POST','/api/crm/deals/:id/notes',(b,p,_url,user)=>{
     const old=rawDeal(db,p.id);revision(b.revision,old);if(old.deleted_at)fail('Сделка в отстойнике',409);
     const note=text(b.text,'text',50000);if(!note)fail('Введите примечание');

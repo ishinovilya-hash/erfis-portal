@@ -247,3 +247,19 @@ test('append note independently preserves deal fields and existing notes with re
  d=r.data.deal;assert.equal((await call('POST','/api/crm/deals/:id/notes',{revision:d.revision,text:' '},d.id)).status,400);
  const saved=(await patch(d,{title:'Changed field'})).data.deal;assert.equal(saved.notes.length,2);
 });
+
+test('archive requires refusal reason after new lead; permanent deletion only for untouched new leads',async t=>{
+ const {create,call,db}=fixture(t);
+ const d=await create({stage:'contract',notes:['Keep']});
+ assert.equal((await call('POST','/api/crm/deals/:id/archive',{revision:d.revision},d.id)).status,400);
+ assert.equal((await call('POST','/api/crm/deals/:id/purge-new',{revision:d.revision},d.id)).status,409);
+ const archived=await call('POST','/api/crm/deals/:id/archive',{revision:d.revision,reason:'Too expensive'},d.id);
+ assert.equal(archived.status,200);assert.equal(archived.data.deal.lost_reason,'Too expensive');assert.equal(archived.data.deal.notes.length,1);
+ const restored=await call('POST','/api/crm/deals/:id/restore',{revision:archived.data.deal.revision},d.id);assert.equal(restored.data.deal.stage,'contract');
+ const lead=await create({notes:['Delete only this']});
+ assert.equal((await call('POST','/api/crm/deals/:id/purge-new',{revision:0},lead.id)).status,409);
+ assert.equal((await call('POST','/api/crm/deals/:id/purge-new',{revision:lead.revision},lead.id)).status,200);
+ assert.equal(db.prepare('SELECT * FROM crm_deals WHERE id=?').get(lead.id),undefined);
+ assert.equal(db.prepare('SELECT count(*) n FROM crm_notes WHERE deal_id=?').get(lead.id).n,0);
+ assert.equal(db.prepare('SELECT count(*) n FROM counterparties').get().n,1);
+});
