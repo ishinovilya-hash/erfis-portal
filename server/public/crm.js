@@ -28,8 +28,6 @@ function crmReport(){
   crmDialog('Передано в работу · по месяцам',`<p class="hint">Количество сделок по дате первой передачи в работу. Повторный перевод не считается новой продажей. Завершение, перенос в отстойник и её очистка не удаляют факт из отчёта. Исправление даты или направления в карточке пересчитывает отчёт.</p><div class="crm-report-table"><table><thead><tr><th>Месяц</th>${directions.map(([,label])=>`<th>${label}</th>`).join('')}<th>Всего</th></tr></thead><tbody>${months.map(month=>{const counts=directions.map(([key])=>rows.find(r=>r.month===month&&r.direction===key)?.count||0);return `<tr><td>${month.split('-').reverse().join('.')}</td>${counts.map(n=>`<td>${n}</td>`).join('')}<td>${counts.reduce((a,b)=>a+b,0)}</td></tr>`;}).join('')}</tbody></table></div><p class="hint">Сделок без даты передачи: ${report.missingDate}. Заполните дату и направление в карточках старых сделок. Одна сделка считается одной единицей.</p>`,null);
 }
 function crmCard(d,trash=false){
-  const tasks=(d.tasks||[]).filter(t=>t.status==='open');
-  const overdue=tasks.some(t=>t.due_at&&new Date(t.due_at)<new Date());
   return `<article class="crm-card ${d.deadline_alert?'crm-deadline-alert':''}" tabindex="0" aria-label="${esc(d.title)} — открыть двойным кликом или Enter" ${trash?'':'draggable="true"'} data-deal="${esc(d.id)}">
     <div class="crm-company" title="${esc(crmClient(d.client_id)?.name||'Клиент')}">${esc(crmClient(d.client_id)?.name||'Клиент')}</div>
     ${d.created_at?`<div class="crm-card-date" title="Дата создания сделки">${esc(new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow'}).format(new Date(d.created_at)))}</div>`:''}
@@ -37,7 +35,7 @@ function crmCard(d,trash=false){
     <div class="crm-card-owner" title="${esc(userName(d.responsible_id)||'Без ответственного')}">${esc(userName(d.responsible_id)||'Без ответственного')}</div>
     <div class="crm-card-money" title="${d.paid===null?'Оплата не указана':esc(`Оплачено: ${crmMoney(d.paid)} · Остаток: ${crmMoney(Math.max(0,d.budget-d.paid))}`)}">${crmMoney(d.budget)}</div>
     ${d.deadline_alert?`<div class="crm-deadline-label">${esc(d.deadline_alert.label)} · ${esc(d.deadline_alert.due.split('-').reverse().join('.'))}</div>`:''}
-    ${tasks.length?`<div class="crm-task-marker ${overdue?'overdue':''}">${overdue?'Просрочено · ':''}Задач: ${tasks.length}</div>`:''}
+
     ${trash?`<button class="btn" data-restore-deal="${esc(d.id)}">Восстановить</button>`:''}</article>`;
 }
 let crmScrollFrame=0;
@@ -72,7 +70,7 @@ function renderCrm(){
     crm.mode==='won'?`<div class="crm-card-grid">${rows.filter(d=>d.stage==='won').map(d=>crmCard(d)).join('')||'<div class="empty">Успешно завершённых сделок пока нет</div>'}</div>`:
     crm.mode==='tasks'?`<div class="listcard">${tasks.map(t=>`<div class="lrow"><div class="lr-main"><button class="crm-card-title" data-open-deal="${esc(t.deal.id)}">${esc(t.title)}</button><div class="lr-s">${esc(t.deal.title)} · ${esc(userName(t.assigned_to)||'Без ответственного')}</div><div class="${t.due_at&&new Date(t.due_at)<new Date()?'overdue':'hint'}">${esc(crmDT(t.due_at))} МСК</div></div><button class="btn" data-task-done="${esc(t.id)}" data-task-deal="${esc(t.deal.id)}">Выполнено</button></div>`).join('')||'<div class="empty">Невыполненных задач нет</div>'}</div>`:
     `<div class="crm-board">${stages.map(s=>{const list=rows.filter(d=>d.stage===s);return `<section class="crm-column" data-stage="${s}"><header><h3>${CRM_LABELS[s]}</h3><span>${list.length} · ${crmMoney(list.reduce((n,d)=>n+d.budget,0))}</span></header><div class="crm-column-cards">${list.map(d=>crmCard(d)).join('')||'<div class="crm-column-empty">Перетащите сделку сюда</div>'}</div></section>`;}).join('')}</div>`}
-    <button type="button" id="crm-back-top" class="btn primary crm-back-top" hidden aria-label="Вернуться наверх">↑ Вверх</button><div id="crm-drop-actions" class="crm-drop-actions" hidden><div id="crm-drop-trash" class="crm-drop-trash">Отстойник</div><div id="crm-drop-won" class="crm-drop-won">Успешно завершена</div><div id="crm-drop-purge" class="crm-drop-purge" hidden>Удалить в преисподню</div></div>`;
+    <button type="button" id="crm-back-top" class="btn primary crm-back-top" hidden aria-label="Вернуться наверх">↑ Вверх</button><div id="crm-drop-actions" class="crm-drop-actions" hidden><div id="crm-drop-trash" class="crm-drop-trash">Отстойник</div><div id="crm-drop-won" class="crm-drop-won">Успешно завершена</div><div id="crm-drop-purge" class="crm-drop-purge" hidden>Выкинуть в преисподнюю</div></div>`;
   document.querySelectorAll('[data-crm-mode]').forEach(b=>b.onclick=()=>{crm.mode=b.dataset.crmMode;renderCrm();});
   $('#crm-responsible').onchange=e=>{crm.responsible=e.target.value;renderCrm();};
   $('#crm-add').onclick=()=>crmEdit();
