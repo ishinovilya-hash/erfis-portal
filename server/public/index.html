@@ -480,7 +480,7 @@ const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&l
 
 const state = {
   me:null, users:[], byId:{},
-  route:'trademarks',
+  route:'crm',
   objects:{trademark:null, patent:null, software:null, shipment:null, contract:null},
   reminders:null, trash:null, activity:null, price:null, priceEdit:null, contractKind:'legal',
   trips:null, tripForm:null, tripMonth:new Date(new Date().getFullYear(),new Date().getMonth(),1),
@@ -553,7 +553,7 @@ const ROUTES = {
 };
 function go(r){
   if(crmBusy()) return;
-  if(!ROUTES[r]) r='trademarks';
+  if(!ROUTES[r]) r='crm';
   state.route = r;
   state.ui.sort = {key:'holder',dir:1};
   state.ui.status=''; state.ui.resp=''; state.ui.flag='';
@@ -563,7 +563,7 @@ function go(r){
   refresh().catch(e=> toast(e.message, true));
 }
 window.addEventListener('hashchange', ()=>{
-  const hash=location.hash.replace('#/','');const r=hash.split('?')[0]||'trademarks';
+  const hash=location.hash.replace('#/','');const r=hash.split('?')[0]||'crm';
   const deal=new URLSearchParams(hash.split('?')[1]||'').get('deal');
   if(r==='crm'&&deal&&!$('#app').hidden){openCrmDealById(deal);return;}
   if(r!==state.route && ROUTES[r]){ go(r); }
@@ -1918,7 +1918,7 @@ async function startApp(session){
   $('#mename').textContent = state.me.name;
   const hash=location.hash.replace('#/','');const r=hash.split('?')[0];
   const deal=new URLSearchParams(hash.split('?')[1]||'').get('deal');
-  state.route = ROUTES[r] ? r : 'trademarks';
+  state.route = ROUTES[r] ? r : 'crm';
   await refresh();
   if(r==='crm'&&deal)await openCrmDealById(deal);
 }
