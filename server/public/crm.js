@@ -55,6 +55,7 @@ function crmScheduleScroll(){if(!crmScrollFrame)crmScrollFrame=requestAnimationF
 window.addEventListener('scroll',crmScheduleScroll,{passive:true});
 window.addEventListener('resize',crmScheduleScroll);
 function renderCrm(){
+  if(state.route==='clients'&&state.clientView){loadClientDetail(state.clientView).catch(e=>toast(e.message,true));return;}
   if(!crm.deals){$('#view').innerHTML='<div class="pageloader">Загрузка CRM…</div>';return;}
   const rows=(crm.mode==='trash'?crm.trash:crm.deals).filter(crmVisible);
   const stages=Object.keys(CRM_LABELS).filter(s=>!['won','lost'].includes(s));
@@ -113,6 +114,10 @@ function crmDialog(title,body,onSave,saveLabel='Сохранить'){
   crmClose();const el=document.createElement('dialog');el.id='crm-dialog';el.className='crm-dialog';
   el.innerHTML=`<form><header><h2>${esc(title)}</h2><button type="button" class="btn" data-cancel aria-label="Закрыть">×</button></header><div class="crm-dialog-content">${body}</div><div class="crm-error" role="alert"></div><footer><button type="button" class="btn" data-cancel>Отмена</button>${onSave?`<button class="btn primary" type="submit">${esc(saveLabel)}</button>`:''}</footer></form>`;
   document.body.appendChild(el);el.showModal();
+  const outside=e=>{const r=el.getBoundingClientRect();return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom;};
+  let pressedOutside=false;
+  el.addEventListener('pointerdown',e=>{pressedOutside=e.target===el&&outside(e);});
+  el.addEventListener('click',e=>{if(pressedOutside&&e.target===el&&outside(e)&&!crm.busy)crmClose();pressedOutside=false;});
   el.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>{if(!crm.busy)crmClose();});
   el.oncancel=e=>{if(crm.busy)e.preventDefault();else setTimeout(()=>el.remove(),0);};
   el.querySelector('form').onsubmit=async e=>{
@@ -216,7 +221,13 @@ function crmTaskForm(d,t=null){
   });
 }
 async function openCrmDealById(id){
-  try{crmClose();state.route='crm';history.replaceState(null,'','#/crm');await loadCrm();renderAll();const d=crm.deals.find(x=>x.id===id);if(d)crmEdit(d);else toast('Сделка не найдена или перемещена в корзину',true);}catch(e){toast(e.message,true);}
+  const fromClient=state.route==='clients'&&!!state.clientView;
+  try{
+    crmClose();
+    if(!fromClient){state.route='crm';history.replaceState(null,'','#/crm');}
+    await loadCrm();if(!fromClient)renderAll();
+    const d=crm.deals.find(x=>x.id===id);if(d)crmEdit(d);else toast('Сделка не найдена или перемещена в отстойник',true);
+  }catch(e){toast(e.message,true);}
 }
 
 function crmPayment(d){
