@@ -159,7 +159,7 @@ function crmEdit(original){
   const d=original||{title:'',client_id:'',stage:'new',responsible_id:state.me.id,budget:0,duties:0,paid:null,contact:{},tags:[],notes:[],tasks:[]};
   if(d.deleted_at){crmDialog('Сделка в отстойнике',`<p>${esc(d.title)}</p><p>${esc(crmClient(d.client_id)?.name)}</p>${d.lost_reason?`<p>Причина отказа: ${esc(d.lost_reason)}</p>`:''}<p>Восстановите сделку, чтобы изменить её.</p>`,null);return;}
   const contact={...(d.contact||{}),...(crmClient(d.client_id)?.contacts?.[0]||{})};
-  const actions=d.id?`<div class="crm-editor-actions">${!d.paid_on&&!['won','lost','act_ready','act_sent'].includes(d.stage)?'<button type="button" class="btn primary" id="crm-payment">Оплата получена</button>':''}<button type="button" class="btn" id="crm-client-open">Карточка клиента →</button><button type="button" class="btn" id="crm-upsell-add">Доп. продажа</button><button type="button" class="btn danger" id="crm-deal-delete">В отстойник</button></div>`:'';
+  const actions=d.id?`<div class="crm-editor-actions"><button type="button" class="btn" id="crm-client-open">Карточка клиента →</button><button type="button" class="btn danger" id="crm-deal-delete">В отстойник</button></div>`:'';
   const body=`${actions}<div class="crm-deal-layout"><section class="crm-deal-fields"><div class="crm-form-grid">${crmField('Номер технического задания','tz_number',d.tz_number||'','text')}${crmField('Услуга','service',d.service||d.title||'','text',true)}
     <div class="crm-field crm-client-picker"><label for="crm-client-input">Клиент 360</label><input id="crm-client-input" name="client_name" value="${esc(crmClient(d.client_id)?.name||'')}" required autocomplete="off" role="combobox" aria-expanded="false" aria-controls="crm-client-options"><div id="crm-client-options" class="crm-client-options" role="listbox" hidden></div></div>
     ${crmSelect('Этап','stage',d.stage,Object.entries(CRM_LABELS).filter(([key])=>!['won','lost'].includes(key)||key===d.stage))}${crmSelect('Ответственный','responsible_id',d.responsible_id||'',crmUsers(),true)}
@@ -205,10 +205,8 @@ function crmEdit(original){
         input.value='';$('#crm-notes-list').innerHTML=crmNotesHtml(d.notes);toast('Примечание записано');
       }catch(e){toast(e.message,true);}finally{crm.busy=false;button.disabled=false;}
     };
-    if($('#crm-payment'))$('#crm-payment').onclick=()=>{if(confirm('Перейти к отметке оплаты? Несохранённые изменения карточки не сохранятся.'))crmPayment(d);};
     $('#crm-client-open').onclick=async()=>{crmClose();state.route='clients';history.replaceState(null,'','#/clients');state.clientView=d.client_id;state.clientDetail=null;renderAll();await loadClientDetail(d.client_id);};
     $('#crm-deal-delete').onclick=()=>crmArchive(d);
-    $('#crm-upsell-add').onclick=()=>{if(confirm('Создать отдельную сделку для доп. продажи? Несохранённые изменения карточки не сохранятся.'))crmEdit({title:'',tz_number:'',service:d.service||d.title,client_id:d.client_id,parent_deal_id:d.id,stage:'new',responsible_id:d.responsible_id,budget:0,duties:0,paid:null,contact:{...contact},tags:['Доп. продажа'],notes:[],tasks:[]});};
 
   }
 }
