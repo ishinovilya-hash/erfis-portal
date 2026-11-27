@@ -160,7 +160,7 @@ function crmEdit(original){
   if(d.deleted_at){crmDialog('Сделка в отстойнике',`<p>${esc(d.title)}</p><p>${esc(crmClient(d.client_id)?.name)}</p>${d.lost_reason?`<p>Причина отказа: ${esc(d.lost_reason)}</p>`:''}<p>Восстановите сделку, чтобы изменить её.</p>`,null);return;}
   const contact={...(d.contact||{}),...(crmClient(d.client_id)?.contacts?.[0]||{})};
   const actions=d.id?`<div class="crm-editor-actions">${!d.paid_on&&!['won','lost','act_ready','act_sent'].includes(d.stage)?'<button type="button" class="btn primary" id="crm-payment">Оплата получена</button>':''}<button type="button" class="btn" id="crm-client-open">Карточка клиента →</button><button type="button" class="btn" id="crm-upsell-add">Доп. продажа</button><button type="button" class="btn danger" id="crm-deal-delete">В отстойник</button></div>`:'';
-  const body=`${actions}<div class="crm-deal-layout"><section class="crm-deal-fields"><div class="crm-form-grid">${crmField('Название сделки','title',d.title,'text',true)}
+  const body=`${actions}<div class="crm-deal-layout"><section class="crm-deal-fields"><div class="crm-form-grid">${crmField('Номер технического задания','tz_number',d.tz_number||'','text')}${crmField('Услуга','service',d.service||d.title||'','text',true)}
     <div class="crm-field crm-client-picker"><label for="crm-client-input">Клиент 360</label><input id="crm-client-input" name="client_name" value="${esc(crmClient(d.client_id)?.name||'')}" required autocomplete="off" role="combobox" aria-expanded="false" aria-controls="crm-client-options"><div id="crm-client-options" class="crm-client-options" role="listbox" hidden></div></div>
     ${crmSelect('Этап','stage',d.stage,Object.entries(CRM_LABELS).filter(([key])=>!['won','lost'].includes(key)||key===d.stage))}${crmSelect('Ответственный','responsible_id',d.responsible_id||'',crmUsers(),true)}
     ${crmField('Стоимость работ, ₽','budget',d.budget,'number',true)}
@@ -172,7 +172,7 @@ function crmEdit(original){
     </section><section class="crm-deal-activity"><h3>Примечание</h3>${d.lost_reason?`<p class="hint">Причина отказа: ${esc(d.lost_reason)}</p>`:''}<label class="crm-field">Текст примечания<textarea name="new_note" rows="4"></textarea></label><button type="button" class="btn primary" id="crm-note-add" ${d.id?'':'disabled'}>Записать</button>${d.id?'':'<p class="hint">Сначала создайте сделку. Введённое примечание сохранится вместе с ней.</p>'}<div class="crm-notes" id="crm-notes-list">${crmNotesHtml(d.notes)}</div></section></div>`;
   const el=crmDialog(d.id?'Карточка сделки':'Новая сделка',body,async f=>{
     const client=crm.clients.find(c=>c.name===f.client_name.trim());if(!client)throw Error('Выберите существующего клиента из списка. Нового клиента сначала создайте в «Клиенты 360».');
-    const patch={title:f.title,client_id:client.id,responsible_id:f.responsible_id,stage:f.stage,budget:Number(f.budget),direction:f.direction,work_days:f.work_days===''?0:Number(f.work_days),paid_on:f.paid_on,source:f.source,executor_id:f.responsible_id||null,deadline:f.deadline,contact:{...contact,...Object.fromEntries(['name','email','phone','telegram','position'].map(k=>[k,f['contact_'+k]]))}};
+    const patch={tz_number:f.tz_number.trim(),service:f.service.trim(),client_id:client.id,responsible_id:f.responsible_id,stage:f.stage,budget:Number(f.budget),direction:f.direction,work_days:f.work_days===''?0:Number(f.work_days),paid_on:f.paid_on,source:f.source,executor_id:f.responsible_id||null,deadline:f.deadline,contact:{...contact,...Object.fromEntries(['name','email','phone','telegram','position'].map(k=>[k,f['contact_'+k]]))}};
     if(d.id)patch.revision=d.revision;
     if(d.parent_deal_id)patch.parent_deal_id=d.parent_deal_id;
     if(f.new_note.trim()){if(d.id)throw Error('Нажмите «Записать», чтобы сохранить примечание.');patch.notes=[f.new_note.trim()];}
@@ -208,7 +208,7 @@ function crmEdit(original){
     if($('#crm-payment'))$('#crm-payment').onclick=()=>{if(confirm('Перейти к отметке оплаты? Несохранённые изменения карточки не сохранятся.'))crmPayment(d);};
     $('#crm-client-open').onclick=async()=>{crmClose();state.route='clients';history.replaceState(null,'','#/clients');state.clientView=d.client_id;state.clientDetail=null;renderAll();await loadClientDetail(d.client_id);};
     $('#crm-deal-delete').onclick=()=>crmArchive(d);
-    $('#crm-upsell-add').onclick=()=>{if(confirm('Создать отдельную сделку для доп. продажи? Несохранённые изменения карточки не сохранятся.'))crmEdit({title:'Доп. продажа: '+d.title,client_id:d.client_id,parent_deal_id:d.id,stage:'new',responsible_id:d.responsible_id,budget:0,duties:0,paid:null,contact:{...contact},tags:['Доп. продажа'],notes:[],tasks:[]});};
+    $('#crm-upsell-add').onclick=()=>{if(confirm('Создать отдельную сделку для доп. продажи? Несохранённые изменения карточки не сохранятся.'))crmEdit({title:'',tz_number:'',service:d.service||d.title,client_id:d.client_id,parent_deal_id:d.id,stage:'new',responsible_id:d.responsible_id,budget:0,duties:0,paid:null,contact:{...contact},tags:['Доп. продажа'],notes:[],tasks:[]});};
 
   }
 }

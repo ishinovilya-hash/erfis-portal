@@ -724,7 +724,7 @@ route('GET', '/api/clients/:id', async (req,res,p) => {
   for(const r of db.prepare('SELECT * FROM objects WHERE client_id=? AND deleted_at IS NULL ORDER BY holder,name').all(c.id)){
     if(r.refused_at)objects.refused.push(rowToApi(r));else if(objects[r.type])objects[r.type].push(rowToApi(r));
   }
-  const deals=db.prepare('SELECT id,title,stage,budget FROM crm_deals WHERE client_id=? AND deleted_at IS NULL ORDER BY updated_at DESC').all(c.id);
+  const deals=db.prepare('SELECT id,title,tz_number,service,stage,budget FROM crm_deals WHERE client_id=? AND deleted_at IS NULL ORDER BY updated_at DESC').all(c.id);
   json(res,200,{...clientApi(c),objects,deals});
 });
 route('POST', '/api/clients', async (req,res) => {

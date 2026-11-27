@@ -56,6 +56,14 @@ export function initCrm(db) {
     if(!columns.has('work_started_on'))db.exec("ALTER TABLE crm_deals ADD COLUMN work_started_on TEXT NOT NULL DEFAULT ''");
     if(!columns.has('paid_on'))db.exec("ALTER TABLE crm_deals ADD COLUMN paid_on TEXT NOT NULL DEFAULT ''");
     if(!columns.has('work_days'))db.exec("ALTER TABLE crm_deals ADD COLUMN work_days INTEGER NOT NULL DEFAULT 0");
+    if(!columns.has('tz_number')){
+      db.exec("ALTER TABLE crm_deals ADD COLUMN tz_number TEXT NOT NULL DEFAULT ''");
+      const update=db.prepare('UPDATE crm_deals SET tz_number=?,service=? WHERE id=?');
+      for(const row of db.prepare('SELECT id,title,service FROM crm_deals').all()){
+        const match=row.title.match(/^т[зz]\s*№?\s*(\d+(?:[/-]\d+)*)\s+(.+)$/iu);
+        update.run(match?.[1]||'',row.service||match?.[2]||row.title,row.id);
+      }
+    }
     initCrmMail(db);
     // Independent from deal deletion: a recorded start remains in historical totals.
     db.exec(`CREATE TABLE IF NOT EXISTS crm_work_register (
@@ -92,10 +100,10 @@ function dealApi(db,row) {
     tasks:db.prepare('SELECT * FROM crm_tasks WHERE deal_id=? ORDER BY created_at,id').all(row.id),
     notes:db.prepare('SELECT * FROM crm_notes WHERE deal_id=? ORDER BY rowid').all(row.id)};
 }
-const fields = ['paid_on','work_days','direction','work_started_on','client_id','title','responsible_id','executor_id','service','source','tags','budget','duties','paid','allow_advance','deadline','next_action','next_contact','contact','stage','source_id','lost_reason','parent_deal_id'];
+const fields = ['tz_number','paid_on','work_days','direction','work_started_on','client_id','title','responsible_id','executor_id','service','source','tags','budget','duties','paid','allow_advance','deadline','next_action','next_contact','contact','stage','source_id','lost_reason','parent_deal_id'];
 function values(db,b,old) {
   if (!object(b)) fail('Ожидается объект');
-  const d = {...{paid_on:'',work_days:0,direction:'',work_started_on:'',responsible_id:null,executor_id:null,service:'',source:'',tags:[],budget:0,duties:0,paid:null,allow_advance:false,deadline:'',next_action:'',next_contact:'',contact:{},stage:'new',source_id:null,lost_reason:'',parent_deal_id:null},
+  const d = {...{tz_number:'',title:'',paid_on:'',work_days:0,direction:'',work_started_on:'',responsible_id:null,executor_id:null,service:'',source:'',tags:[],budget:0,duties:0,paid:null,allow_advance:false,deadline:'',next_action:'',next_contact:'',contact:{},stage:'new',source_id:null,lost_reason:'',parent_deal_id:null},
     ...(old ? {...old,tags:JSON.parse(old.tags),contact:JSON.parse(old.contact),allow_advance:!!old.allow_advance}:{} )};
   for (const key of fields) if(own(b,key)) d[key]=b[key];
   d.client_id=reference(db,'counterparties',d.client_id,'client_id',true);
@@ -106,8 +114,9 @@ function values(db,b,old) {
     const seen=new Set([old.id]);
     while(parent) { if(seen.has(parent))fail('Циклическая связь сделок'); seen.add(parent); parent=rawDeal(db,parent).parent_deal_id; }
   }
-  for(const key of ['title','service','source','next_action','lost_reason']) d[key]=text(d[key],key);
-  if(!d.title)fail('Укажите название');
+  for(const key of ['tz_number','title','service','source','next_action','lost_reason']) d[key]=text(d[key],key);
+  if(own(b,'tz_number')||(!own(b,'title')&&own(b,'service'))){if(!d.service)fail('Укажите услугу');d.title=(d.tz_number?'ТЗ '+d.tz_number+' · ':'')+d.service;}
+  if(!d.title)fail('Укажите услугу');
   d.paid_on=date(d.paid_on,'paid_on');
   if(d.paid_on&&(!/^\d{4}-\d{2}-\d{2}$/.test(d.paid_on)||d.paid_on>moscowDay()))fail('Неверная дата оплаты');
   if(!Number.isInteger(d.work_days)||d.work_days<0||d.work_days>500)fail('Срок: от 1 до 500 рабочих дней');

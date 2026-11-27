@@ -271,3 +271,5 @@ input:not([type="checkbox"]):not([type="radio"]),select,textarea{accent-color:va
 .crm-client-options[hidden]{display:none}
 .crm-client-options button{display:block;width:100%;text-align:left;padding:9px 10px;border:0;background:transparent;color:var(--ink);font:inherit;font-size:13px;cursor:pointer;overflow-wrap:anywhere}
 .crm-client-options button:hover,.crm-client-options button:focus{background:var(--accent-soft);outline:none}
+
+.crm-client-deal-link{border:0;background:none;color:var(--accent);font:inherit;text-align:left;cursor:pointer;padding:0;line-height:1.5}.crm-client-deal-link:hover{text-decoration:underline}.crm-client-deals td{white-space:normal}

@@ -282,3 +282,16 @@ test('optional payment date and working days compute deadline and update monthly
  d=(await patch(d,{paid_on:'2026-11-23'})).data.deal;
  assert.equal(d.deadline,'2026-11-30');assert.equal(d.work_started_on,'2026-11-23');
 });
+
+test('TZ number and service create readable deal title and migrate legacy names without losing data',async t=>{
+ const {db,call,patch}=fixture(t);
+ const r=await call('POST','/api/crm/deals',{client_id:'c1',tz_number:'12',service:'Патентный поиск',stage:'contract'});
+ assert.equal(r.status,200);assert.equal(r.data.deal.title,'ТЗ 12 · Патентный поиск');
+ const updated=(await patch(r.data.deal,{tz_number:'13',service:'Поиск ПМ'})).data.deal;
+ assert.equal(updated.title,'ТЗ 13 · Поиск ПМ');
+ db.prepare('UPDATE crm_deals SET title=?,service=? WHERE id=?').run('Тз3 поиск патентоспособности Порт утончения','',updated.id);
+ db.exec('ALTER TABLE crm_deals DROP COLUMN tz_number');initCrm(db);
+ const migrated=db.prepare('SELECT * FROM crm_deals WHERE id=?').get(updated.id);
+ assert.equal(migrated.tz_number,'3');assert.equal(migrated.service,'поиск патентоспособности Порт утончения');assert.equal(migrated.title,'Тз3 поиск патентоспособности Порт утончения');
+ initCrm(db);assert.equal(db.prepare('SELECT count(*) n FROM crm_deals').get().n,1);
+});
