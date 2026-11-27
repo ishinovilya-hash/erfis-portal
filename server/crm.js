@@ -137,8 +137,8 @@ function values(db,b,old) {
   if(d.source_id && db.prepare('SELECT id FROM crm_deals WHERE source_id=? AND id<>?').get(d.source_id,old?.id||''))fail('source_id уже существует',409);
   return d;
 }
-function gate(d, requirePayment=false) {
-  if(d.stage==='offer' && (!d.next_action || !d.next_contact))fail('Укажите следующее действие и дату контакта');
+function gate(d, requirePayment=false, previousStage=null) {
+  if(d.stage==='offer' && !['contract','work','act_ready','act_sent','won','lost'].includes(previousStage) && (!d.next_action || !d.next_contact))fail('Укажите следующее действие и дату контакта');
   if(d.stage==='work'&&requirePayment) {
     if(!d.executor_id||!d.deadline)fail('Укажите исполнителя и срок');
     if(!(d.paid!==null && (d.paid>=d.budget || (d.allow_advance && d.paid>0))))fail('Нужна полная оплата или согласованный оплаченный аванс');
@@ -173,7 +173,7 @@ function save(db,b,id=null,historical=false) {
   if(old) { revision(b.revision,old); if(old.deleted_at)fail('Сделка в корзине',409); }
   const d=values(db,b,old),at=now(),cid=id||'cd-'+randomUUID();
   // Existing historical rows can be edited without retroactively imposing entry gates.
-  if(!historical && (!old||old.stage!==d.stage))gate(d);
+  if(!historical && (!old||old.stage!==d.stage))gate(d,false,old?.stage);
   if(!historical && d.stage==='work' && d.paid_on && !d.work_started_on)d.work_started_on=d.paid_on;
   if(old) db.prepare(`UPDATE crm_deals SET ${fields.map(k=>k+'=?').join(',')},revision=revision+1,updated_at=? WHERE id=?`).run(...fields.map(k=>d[k]),at,cid);
   else {

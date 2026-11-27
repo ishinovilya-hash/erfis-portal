@@ -133,6 +133,7 @@ async function crmSave(d,b){
 function crmWorkflow(d,b){
   const merged={...d,...b},stage=merged.stage;
   if(d.id&&d.stage===stage){return crmSave(d,b);}
+  if(stage==='offer'&&['contract','work','act_ready','act_sent','won','lost'].includes(d.stage))return crmSave(d,b).catch(e=>toast(e.message,true));
   let title,fields;
   if(stage==='new'){title='Свяжитесь с клиентом';fields=crmSelect('Ответственный','responsible_id',merged.responsible_id||state.me.id,crmUsers(),true)+crmField('Что сделать','next_action',merged.next_action||'Связаться с клиентом','text',true)+crmField('Когда связаться · МСК','next_contact',crmInputTime(merged.next_contact),'datetime-local',true);}
   else if(stage==='offer'){title='Когда связаться повторно?';fields=crmSelect('Ответственный','responsible_id',merged.responsible_id||state.me.id,crmUsers(),true)+crmField('Следующее действие','next_action',merged.next_action||'Уточнить решение по КП','text',true)+crmField('Дата и время · МСК','next_contact',crmInputTime(merged.next_contact),'datetime-local',true);}

@@ -263,3 +263,14 @@ test('archive requires refusal reason after new lead; permanent deletion only fo
  assert.equal(db.prepare('SELECT count(*) n FROM crm_notes WHERE deal_id=?').get(lead.id).n,0);
  assert.equal(db.prepare('SELECT count(*) n FROM counterparties').get().n,1);
 });
+
+test('returning from contract and later stages to offer needs no new contact details',async t=>{
+ const {create,patch}=fixture(t);
+ for(const stage of ['contract','work','act_ready','act_sent','won','lost']){
+  let d=await create({stage,...(stage==='lost'?{lost_reason:'Declined'}:{})});
+  const result=await patch(d,{stage:'offer'});
+  assert.equal(result.status,200,stage);assert.equal(result.data.deal.stage,'offer');
+  assert.equal(result.data.deal.next_contact,'');
+ }
+ const lead=await create();assert.equal((await patch(lead,{stage:'offer'})).status,400);
+});
