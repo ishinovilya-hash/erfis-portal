@@ -94,12 +94,12 @@ function renderClientForm(){
     catch(e){f.busy=false;renderClients();toast(e.message,true);}
   };
 }
-async function beginClientLink(d){
+async function beginClientLink(d,type=null){
   try{
-    const types=['trademark','patent','software','refused','contract'];
+    const types=type?[type]:['trademark','patent','software','refused','contract'];
     const data=await Promise.all(types.map(t=>api('/objects?type='+t)));
     if(state.clientView!==d.id)return;
-    state.clientLink={items:data.flatMap(x=>x.objects).filter(o=>o.clientId!==d.id),q:''};renderClients();
+    state.clientLink={type,items:data.flatMap(x=>x.objects).filter(o=>o.clientId!==d.id),q:''};renderClients();
   }catch(e){toast(e.message,true);}
 }
 function renderClientLink(d){
@@ -117,15 +117,14 @@ function renderClients(){
       <h3>Контактная информация</h3><div class="listcard" style="margin-bottom:20px">${d.contacts.length?d.contacts.map(c=>`<div class="lrow"><div class="lr-main"><div>${esc(c.name||'Контакт')}</div><div class="lr-s">Email: ${esc(c.email||'—')} · Телефон: ${esc(c.phone||'—')} · Telegram: ${esc(c.telegram||'—')}</div></div></div>`).join(''):'<div class="empty">Контакты пока не добавлены</div>'}</div>
       <h3>Сделки CRM</h3><div class="tablewrap crm-client-deals" style="margin-bottom:20px"><table><thead><tr><th>№ Тех. задания</th><th>Услуга</th><th>Этап</th><th>Стоимость работ</th></tr></thead><tbody>${(d.deals||[]).length?[...d.deals].sort((a,b)=>{if(!a.tz_number&&b.tz_number)return 1;if(a.tz_number&&!b.tz_number)return -1;return String(a.tz_number||'').localeCompare(String(b.tz_number||''),'ru',{numeric:true})||a.title.localeCompare(b.title,'ru');}).map(deal=>`<tr data-client-deal="${esc(deal.id)}" tabindex="0" class="${['won','lost'].includes(deal.stage)?'crm-client-deal-finished':'crm-client-deal-active'}"><td>${esc(deal.tz_number||'—')}</td><td><button class="crm-client-deal-link">${esc(deal.service||deal.title)}</button></td><td>${esc(CRM_LABELS[deal.stage]||deal.stage)}</td><td>${Number(deal.budget||0).toLocaleString('ru-RU')} ₽</td></tr>`).join(''):'<tr><td colspan="4"><div class="empty">Сделок пока нет</div></td></tr>'}</tbody></table></div>
       <h3>Договоры</h3>${clientTable('contract',d.objects.contract)}<button class="btn" data-client-create="contract" style="margin:12px 0">Добавить договор</button>
-      <h3>Объекты</h3><div class="toolbar">${['trademark','patent','software'].map(t=>`<button class="btn" data-client-create="${t}">${REG[t].add}</button>`).join('')}<button class="btn" id="client-link">Привязать существующий</button></div>
-      ${state.clientLink?renderClientLink(d):''}<div class="hint">Двойной щелчок по объекту — открыть карточку. Номера можно копировать кнопкой ⧉.</div>
-      ${['trademark','patent','software'].map(t=>`<h3 class="price-cat">${CLIENT_TYPE_LABELS[t]} (${d.objects[t].length})</h3>${clientTable(t,d.objects[t])}`).join('')}
+      <div class="hint">Двойной щелчок по объекту — открыть карточку. Номера можно копировать кнопкой ⧉.</div>
+      ${['trademark','patent','software'].map(t=>`<div class="client-object-heading"><h3 class="price-cat">${CLIENT_TYPE_LABELS[t]} (${d.objects[t].length})</h3><button class="btn" data-client-create="${t}">${REG[t].add}</button><button class="btn" data-client-link-type="${t}">Привязать существующий</button></div>${state.clientLink?.type===t?renderClientLink(d):''}${clientTable(t,d.objects[t])}`).join('')}
       ${d.objects.refused.length?`<h3 class="price-cat">Отказные объекты (${d.objects.refused.length})</h3>${clientTable('refused',d.objects.refused)}`:''}
-      <h3 class="price-cat">Технические задания</h3><div class="listcard"><div class="empty">Технических заданий пока нет</div></div>`;
+      `;
     $('#client-back').onclick=()=>{state.clientView=null;state.clientDetail=null;state.clientLink=null;renderClients();};
     $('#client-edit').onclick=()=>editClient(d);
     document.querySelectorAll('[data-client-deal]').forEach(row=>{row.onclick=()=>openCrmDealById(row.dataset.clientDeal);row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openCrmDealById(row.dataset.clientDeal);}};});
-    $('#client-link').onclick=()=>beginClientLink(d);
+    document.querySelectorAll('[data-client-link-type]').forEach(b=>b.onclick=()=>beginClientLink(d,b.dataset.clientLinkType));
     document.querySelectorAll('[data-client-create]').forEach(b=>b.onclick=()=>{
       if(b.dataset.clientCreate==='contract')state.contractKind=d.opf==='физ. лицо'?'individual':'legal';
       openCreate(b.dataset.clientCreate,d);

@@ -280,3 +280,5 @@ input:not([type="checkbox"]):not([type="radio"]),select,textarea{accent-color:va
 .crm-client-deals .crm-client-deal-finished .crm-client-deal-link{color:var(--ink-3)}
 
 .crm-client-deals tr[data-client-deal]{cursor:pointer}.crm-client-deals tr[data-client-deal]:hover td{filter:brightness(.96)}.crm-client-deals tr[data-client-deal]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+.client-object-heading{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:24px 0 12px}.client-object-heading .price-cat{margin:0;margin-right:auto}.client-object-heading .btn{font-size:12px;padding:7px 10px}
