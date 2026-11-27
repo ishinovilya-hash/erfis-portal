@@ -1981,7 +1981,12 @@ $('#search').addEventListener('input', e=>{
 $('#menutoggle').onclick = ()=> $('#side').classList.toggle('open');
 $('#nav').addEventListener('click', e=>{
   const a = e.target.closest('a[data-r]'); if(!a) return;
-  e.preventDefault(); $('#side').classList.remove('open'); go(a.dataset.r);
+  e.preventDefault();
+  if(crmBusy())return;
+  if(a.dataset.r==='clients'){
+    state.clientView=null;state.clientDetail=null;state.clientForm=null;state.clientLink=null;state.clientReturn=null;state.clientsQ='';
+  }
+  $('#side').classList.remove('open'); go(a.dataset.r);
 });
 document.addEventListener('keydown', e=>{
   if(e.key==='Escape'){
