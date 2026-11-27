@@ -255,3 +255,5 @@ input:not([type="checkbox"]):not([type="radio"]),select,textarea{accent-color:va
 
 /* CRM page title stays at the start; only pipeline headings follow scrolling. */
 .main:has(#view[data-route="crm"])>.topbar{position:static}
+
+.crm-month-placeholder{min-height:72px}

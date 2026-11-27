@@ -247,11 +247,13 @@ export function registerCrmRoutes({route,db,json,readBody,currentUser,logActivit
     gate({...old,...patch});
     const deal=save(db,patch,old.id);log('crm_payment',deal,user);return {deal};
   });
-  register('GET','/api/crm/report',()=>({
+  register('GET','/api/crm/report',(_b,_p,_url,user)=>{
+    if(!user.is_manager)fail('Только руководителю',403);
+    return {
     month:moscowDay().slice(0,7),mailConfigured:mailStatus().configured,
     rows:db.prepare("SELECT substr(started_on,1,7) month,direction,count(*) count FROM crm_work_register GROUP BY month,direction ORDER BY month DESC").all(),
     missingDate:db.prepare("SELECT count(*) n FROM crm_deals WHERE deleted_at IS NULL AND stage IN ('work','act_ready','act_sent','won') AND work_started_on='' ").get().n
-  }));
+  };});
   register('GET','/api/crm/deals',(_b,_p,url)=>{
     const query=url?.searchParams||new URLSearchParams();
     let sql='SELECT * FROM crm_deals WHERE deleted_at IS '+(query.get('trash')==='1'?'NOT NULL':'NULL');

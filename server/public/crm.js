@@ -9,7 +9,7 @@ const crmInputTime=v=>v?new Date(new Date(v).getTime()+10800000).toISOString().s
 const crmISO=v=>v?v+':00+03:00':'';
 function crmBusy(){return crm.busy||!!crm.drag||!!document.querySelector('#crm-dialog');}
 async function loadCrm(){
-  const [deals,clients,trash,report]=await Promise.all([api('/crm/deals'),api('/clients'),api('/crm/deals?trash=1'),api('/crm/report')]);
+  const [deals,clients,trash,report]=await Promise.all([api('/crm/deals'),api('/clients'),api('/crm/deals?trash=1'),state.me.isManager?api('/crm/report'):Promise.resolve(null)]);
   crm.report=report;crm.deals=deals.deals;crm.clients=clients.clients;crm.trash=trash.deals;
 }
 function crmVisible(d){
@@ -18,6 +18,7 @@ function crmVisible(d){
     (!q||[d.title,crmClient(d.client_id)?.name,d.contact?.name,d.contact?.phone,d.contact?.email,...(d.tags||[])].some(v=>String(v||'').toLocaleLowerCase('ru').includes(q)));
 }
 function crmReport(){
+  if(!state.me.isManager||!crm.report)return;
   const report=crm.report,rows=report?.rows||[];
   const current=report.month;
   const first=rows.length?rows.map(r=>r.month).sort()[0]:current;
@@ -63,7 +64,7 @@ function renderCrm(){
   const active=crm.deals.filter(d=>!['won','lost'].includes(d.stage));
   const month=crm.report?.month||new Date(Date.now()+10800000).toISOString().slice(0,7);
   const count=(direction)=>(crm.report?.rows||[]).find(r=>r.month===month&&r.direction===direction)?.count||0;
-  $('#view').innerHTML=`<div class="crm-summary crm-month-summary"><span><strong>${active.length}</strong> активных сделок</span><div class="crm-month-panel"><div class="crm-month-heading">Передано в работу · ${esc(month.split('-').reverse().join('.'))}<span>${state.me.isManager?'<button class="btn" id="crm-mail-settings">Почта</button>':''} <button class="btn" id="crm-report">По месяцам</button></span></div><div class="crm-month-metrics">${CRM_DIRECTIONS.map(([key,label])=>`<div><strong>${count(key)}</strong><span>${label}</span></div>`).join('')}</div><div class="hint">${crm.report?.mailConfigured?'':'Почтовые напоминания не подключены · '}Без направления за месяц: ${count('')}${crm.report?.missingDate?` · Без даты передачи: ${crm.report.missingDate}`:''}</div></div></div>
+  $('#view').innerHTML=`<div class="crm-summary crm-month-summary"><span><strong>${active.length}</strong> активных сделок</span>${state.me.isManager?`<div class="crm-month-panel"><div class="crm-month-heading">Передано в работу · ${esc(month.split('-').reverse().join('.'))}<span>${state.me.isManager?'<button class="btn" id="crm-mail-settings">Почта</button>':''} <button class="btn" id="crm-report">По месяцам</button></span></div><div class="crm-month-metrics">${CRM_DIRECTIONS.map(([key,label])=>`<div><strong>${count(key)}</strong><span>${label}</span></div>`).join('')}</div><div class="hint">${crm.report?.mailConfigured?'':'Почтовые напоминания не подключены · '}Без направления за месяц: ${count('')}${crm.report?.missingDate?` · Без даты передачи: ${crm.report.missingDate}`:''}</div></div>`:'<div class="crm-month-placeholder" aria-hidden="true"></div>'}</div>
     <div class="toolbar crm-toolbar"><div class="crm-tabs">${[['active','Воронка'],['trash',`Отстойник (${crm.trash.length+crm.deals.filter(d=>d.stage==='lost').length})`],['won',`Успешно завершённые (${crm.deals.filter(d=>d.stage==='won').length})`]].map(([k,l])=>`<button class="btn ${crm.mode===k?'primary':''}" data-crm-mode="${k}">${l}</button>`).join('')}</div>
     <select id="crm-responsible" aria-label="Ответственный"><option value="">Все ответственные</option>${state.users.map(u=>`<option value="${esc(u.id)}" ${crm.responsible===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select>
     <span class="spacer"></span><button class="btn primary" id="crm-add">Новая сделка</button></div>
@@ -77,7 +78,7 @@ function renderCrm(){
   $('#crm-add').onclick=()=>crmEdit();
   $('#crm-back-top').onclick=()=>window.scrollTo({top:0,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
   crmScheduleScroll();
-  $('#crm-report').onclick=crmReport;
+  if($('#crm-report'))$('#crm-report').onclick=crmReport;
   if($('#crm-mail-settings'))$('#crm-mail-settings').onclick=crmMailSettings;
   const openDeal=id=>crmEdit([...crm.deals,...crm.trash].find(d=>d.id===id));
   document.querySelectorAll('[data-open-deal]').forEach(b=>{

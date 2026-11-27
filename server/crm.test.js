@@ -18,7 +18,7 @@ function fixture(t) {
   initCrm(db);
   const routes=new Map();let logFails=false;
   registerCrmRoutes({db,route:(method,path,fn)=>routes.set(method+' '+path,fn),
-    currentUser:req=>req.auth?{id:'u1'}:null,readBody:async req=>{if(req.body instanceof Error)throw req.body;return req.body;},
+    currentUser:req=>req.auth?{id:'u1',is_manager:req.auth!=='employee'}:null,readBody:async req=>{if(req.body instanceof Error)throw req.body;return req.body;},
     json:(res,status,data)=>Object.assign(res,{status,data}),
     logActivity:(kind,obj,_text,user)=>{if(logFails)throw Error('log failure');db.prepare('INSERT INTO activity VALUES(?,?,?)').run(kind,obj?.id??null,user);}});
   const call=async(method,path,body={},id,query='',auth=true)=>{
@@ -199,8 +199,8 @@ test('payment starts work atomically, computes working days and never resets fir
  assert.equal((await call('POST','/api/crm/deals/:id/payment',{...body,revision:d.revision},d.id)).status,400);
  assert.equal((await patch(d,{paid_on:'2026-11-21'})).status,400);
  const advanced=await create({budget:100});r=await call('POST','/api/crm/deals/:id/payment',{...body,revision:advanced.revision,paid:10,allow_advance:true},advanced.id);assert.equal(r.status,200);
- assert.equal((await call('GET','/api/crm/mail')).status,403);
- assert.equal((await call('POST','/api/crm/mail',{from:'client@erfis.ru',password:'test'})).status,403);
+ assert.equal((await call('GET','/api/crm/mail',{},null,'','employee')).status,403);
+ assert.equal((await call('POST','/api/crm/mail',{from:'client@erfis.ru',password:'test'},null,'','employee')).status,403);
 });
 
 test('planned work days save before payment and feed the paid deadline without starting work early',async t=>{
@@ -224,4 +224,12 @@ test('additional directions persist in deals and monthly reporting',async t=>{
  }
  const report=(await call('GET','/api/crm/report')).data;
  for(const direction of ['industrial_designs','litigation_patents','litigation_marks_designs'])assert.equal(report.rows.find(r=>r.month==='2026-11'&&r.direction===direction)?.count,1);
+});
+
+test('monthly report is restricted to manager while employees retain deal access',async t=>{
+ const {call,create}=fixture(t);await create({direction:'patents',work_started_on:'2026-11-01'});
+ const denied=await call('GET','/api/crm/report',{},null,'','employee');
+ assert.equal(denied.status,403);assert.equal(denied.data.rows,undefined);
+ assert.equal((await call('GET','/api/crm/report')).status,200);
+ assert.equal((await call('GET','/api/crm/deals',{},null,'','employee')).status,200);
 });
