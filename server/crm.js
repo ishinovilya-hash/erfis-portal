@@ -262,6 +262,14 @@ export function registerCrmRoutes({route,db,json,readBody,currentUser,logActivit
     return {deals:db.prepare(sql+' ORDER BY updated_at DESC,id').all(...args).map(row=>dealApi(db,row))};
   });
   register('POST','/api/crm/deals',(b,_p,_url,user)=>{const deal=save(db,b);log('crm_create',deal,user);return {deal};});
+  register('POST','/api/crm/deals/:id/notes',(b,p,_url,user)=>{
+    const old=rawDeal(db,p.id);revision(b.revision,old);if(old.deleted_at)fail('Сделка в отстойнике',409);
+    const note=text(b.text,'text',50000);if(!note)fail('Введите примечание');
+    const at=now();
+    db.prepare('INSERT INTO crm_notes(id,deal_id,text,created_at) VALUES(?,?,?,?)').run('cn-'+randomUUID(),p.id,note,at);
+    db.prepare('UPDATE crm_deals SET revision=revision+1,updated_at=? WHERE id=?').run(at,p.id);
+    const deal=dealApi(db,rawDeal(db,p.id));log('crm_note',deal,user);return {deal};
+  });
   register('PATCH','/api/crm/deals/:id',(b,p,_url,user)=>{const deal=save(db,b,p.id);log('crm_edit',deal,user);return {deal};});
   for(const [method,path,restore] of [['DELETE','/api/crm/deals/:id',false],['POST','/api/crm/deals/:id/restore',true]])
     register(method,path,(b,p,_url,user)=>{

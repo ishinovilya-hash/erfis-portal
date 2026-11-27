@@ -238,3 +238,12 @@ test('moving into work does not require payment details or imply a payment start
  assert.equal(d.stage,'work');assert.equal(d.paid,null);assert.equal(d.paid_on,'');assert.equal(d.deadline,'');assert.equal(d.work_started_on,'');
  assert.equal(db.prepare('SELECT count(*) n FROM crm_work_register').get().n,0);
 });
+
+test('append note independently preserves deal fields and existing notes with revision protection',async t=>{
+ const {create,call,patch}=fixture(t);let d=await create({title:'Original',notes:['Keep']});
+ const r=await call('POST','/api/crm/deals/:id/notes',{revision:d.revision,text:'New note'},d.id);
+ assert.equal(r.status,200);assert.equal(r.data.deal.title,'Original');assert.deepEqual(r.data.deal.notes.map(n=>n.text),['Keep','New note']);
+ assert.equal((await call('POST','/api/crm/deals/:id/notes',{revision:d.revision,text:'stale'},d.id)).status,409);
+ d=r.data.deal;assert.equal((await call('POST','/api/crm/deals/:id/notes',{revision:d.revision,text:' '},d.id)).status,400);
+ const saved=(await patch(d,{title:'Changed field'})).data.deal;assert.equal(saved.notes.length,2);
+});
