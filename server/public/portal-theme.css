@@ -252,3 +252,6 @@ input:not([type="checkbox"]):not([type="radio"]),select,textarea{accent-color:va
 .crm-back-top{position:fixed;right:24px;bottom:24px;z-index:25;box-shadow:var(--shadow-lg);padding:10px 16px}
 .crm-back-top[hidden]{display:none}
 @media(max-width:700px){.crm-back-top{right:14px;bottom:14px}}
+
+/* CRM page title stays at the start; only pipeline headings follow scrolling. */
+.main:has(#view[data-route="crm"])>.topbar{position:static}

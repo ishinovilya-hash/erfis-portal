@@ -45,7 +45,7 @@ function crmUpdateScroll(){
   if(button)button.hidden=window.scrollY<300||!!crm.drag;
   const board=document.querySelector('.crm-board');if(!board)return;
   const bar=document.querySelector('.topbar');
-  const top=Math.max(8,(bar?.getBoundingClientRect().bottom||0)+8);
+  const top=bar&&getComputedStyle(bar).position==='sticky'?Math.max(8,bar.getBoundingClientRect().bottom+8):8;
   const rect=board.getBoundingClientRect();
   board.querySelectorAll('.crm-column>header').forEach(header=>{
     const offset=Math.max(0,Math.min(top-rect.top,header.parentElement.offsetHeight-header.offsetHeight));
