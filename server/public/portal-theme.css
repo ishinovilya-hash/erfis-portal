@@ -257,3 +257,5 @@ input:not([type="checkbox"]):not([type="radio"]),select,textarea{accent-color:va
 .main:has(#view[data-route="crm"])>.topbar{position:static}
 
 .crm-month-placeholder{min-height:72px}
+
+.crm-summary[hidden]{display:none}
