@@ -1,4 +1,4 @@
-const CRM_DIRECTIONS=[['patents','Изобретения и полезные модели'],['trademarks','Товарные знаки'],['mincifry','Минцифры'],['software','Программы для ЭВМ']];
+const CRM_DIRECTIONS=[['patents','Изобретения и полезные модели'],['trademarks','Товарные знаки'],['mincifry','Минцифры'],['software','Программы для ЭВМ'],['industrial_designs','Промышленные образцы'],['litigation_patents','Суды (ИЗО, ПМ)'],['litigation_marks_designs','Суды (ТЗ, ПО)']];
 /* CRM uses the portal session, clients and existing employee directory. */
 const CRM_LABELS={new:'Новый лид',offer:'Выставлено КП',contract:'Заключение договора / счёт',work:'В работе',act_ready:'Можно делать акт',act_sent:'Акт отправлен',won:'Сделан акт',lost:'Отказ'};
 const crm={deals:null,clients:[],trash:[],mode:'active',responsible:'',drag:null,busy:false};

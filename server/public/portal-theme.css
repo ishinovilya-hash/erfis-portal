@@ -241,3 +241,5 @@ input:not([type="checkbox"]):not([type="radio"]),select,textarea{accent-color:va
 .crm-deal-activity .crm-task-line .crm-card-title{white-space:normal;overflow-wrap:anywhere}
 .crm-deal-dialog footer{position:sticky;bottom:0;z-index:3;padding:12px 22px}
 @media(max-width:700px){.crm-deal-layout{grid-template-columns:1fr;gap:16px}.crm-deal-fields{border-right:0;padding-right:0;border-bottom:1px solid var(--hairline-2)}.crm-deal-dialog .crm-dialog-content{padding:0 14px 14px}.crm-deal-dialog .crm-editor-actions{margin:0 -14px;padding:10px 14px}.crm-deal-dialog .crm-editor-actions .btn{flex:1 1 auto}.crm-deal-activity{padding-top:0}}
+
+@media(min-width:1200px){.crm-month-metrics{grid-template-columns:repeat(7,minmax(0,1fr))}}

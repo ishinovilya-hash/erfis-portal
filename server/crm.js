@@ -2,7 +2,7 @@ import {addWorkdays,deadlineAlert} from './work-calendar.js';
 import {initCrmMail,mailStatus,saveMailConfig} from './crm-mail.js';
 import { randomUUID } from 'node:crypto';
 
-export const CRM_DIRECTIONS = ['', 'patents', 'trademarks', 'mincifry', 'software'];
+export const CRM_DIRECTIONS = ['', 'patents', 'trademarks', 'mincifry', 'software', 'industrial_designs', 'litigation_patents', 'litigation_marks_designs'];
 const moscowDay = () => new Date(Date.now()+10800000).toISOString().slice(0,10);
 export const CRM_STAGES = Object.freeze(['new','offer','contract','work','act_ready','act_sent','won','lost']);
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), {status}); };

@@ -214,3 +214,14 @@ test('planned work days save before payment and feed the paid deadline without s
  assert.equal((await patch(d,{work_days:0})).status,400);
  d=(await patch(d,{work_days:6})).data.deal;assert.equal(d.deadline,'2026-11-30');assert.equal(d.work_started_on,'2026-11-20');
 });
+
+test('additional directions persist in deals and monthly reporting',async t=>{
+ const {call,create,patch}=fixture(t);
+ for(const direction of ['industrial_designs','litigation_patents','litigation_marks_designs']){
+  let d=await create({direction,work_started_on:'2026-11-01'});
+  assert.equal(d.direction,direction);
+  d=(await patch(d,{title:'Updated '+direction})).data.deal;assert.equal(d.direction,direction);
+ }
+ const report=(await call('GET','/api/crm/report')).data;
+ for(const direction of ['industrial_designs','litigation_patents','litigation_marks_designs'])assert.equal(report.rows.find(r=>r.month==='2026-11'&&r.direction===direction)?.count,1);
+});
