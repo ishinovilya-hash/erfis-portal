@@ -195,7 +195,7 @@ test('payment starts work atomically, computes working days and never resets fir
  assert.equal(d.stage,'work');assert.equal(d.deadline,'2026-11-27');assert.equal(d.work_started_on,'2026-11-20');assert.equal(d.paid_on,'2026-11-20');
  assert.equal(d.tasks.find(t=>t.stage==='work').due_at,'2026-11-27');
  assert.equal((await call('POST','/api/crm/deals/:id/payment',{...body,revision:d.revision},d.id)).status,400);
- assert.equal((await patch(d,{paid_on:'2026-11-21'})).status,400);
+ assert.equal((await patch(d,{paid_on:'9999-11-21'})).status,400);
  const advanced=await create({budget:100});r=await call('POST','/api/crm/deals/:id/payment',{...body,revision:advanced.revision,paid:10,allow_advance:true},advanced.id);assert.equal(r.status,200);
  assert.equal((await call('GET','/api/crm/mail',{},null,'','employee')).status,403);
  assert.equal((await call('POST','/api/crm/mail',{from:'client@erfis.ru',password:'test'},null,'','employee')).status,403);
@@ -273,4 +273,12 @@ test('returning from contract and later stages to offer needs no new contact det
   assert.equal(result.data.deal.next_contact,'');
  }
  const lead=await create();assert.equal((await patch(lead,{stage:'offer'})).status,400);
+});
+
+test('optional payment date and working days compute deadline and update monthly start after correction',async t=>{
+ const {create,patch}=fixture(t);let d=await create({work_days:5});assert.equal(d.deadline,'');assert.equal(d.paid_on,'');
+ d=(await patch(d,{paid_on:'2026-11-20'})).data.deal;
+ assert.equal(d.deadline,'2026-11-27');assert.equal(d.work_started_on,'2026-11-20');assert.equal(d.stage,'new');assert.equal(d.paid,null);
+ d=(await patch(d,{paid_on:'2026-11-23'})).data.deal;
+ assert.equal(d.deadline,'2026-11-30');assert.equal(d.work_started_on,'2026-11-23');
 });

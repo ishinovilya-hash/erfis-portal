@@ -135,8 +135,8 @@ function crmWorkflow(d,b){
   if(d.id&&d.stage===stage){return crmSave(d,b);}
   if(stage==='offer'&&['contract','work','act_ready','act_sent','won','lost'].includes(d.stage))return crmSave(d,b).catch(e=>toast(e.message,true));
   let title,fields;
-  if(stage==='new'){title='Свяжитесь с клиентом';fields=crmSelect('Ответственный','responsible_id',merged.responsible_id||state.me.id,crmUsers(),true)+crmField('Что сделать','next_action',merged.next_action||'Связаться с клиентом','text',true)+crmField('Когда связаться · МСК','next_contact',crmInputTime(merged.next_contact),'datetime-local',true);}
-  else if(stage==='offer'){title='Когда связаться повторно?';fields=crmSelect('Ответственный','responsible_id',merged.responsible_id||state.me.id,crmUsers(),true)+crmField('Следующее действие','next_action',merged.next_action||'Уточнить решение по КП','text',true)+crmField('Дата и время · МСК','next_contact',crmInputTime(merged.next_contact),'datetime-local',true);}
+  if(stage==='new')return crmSave(d,b);
+  if(stage==='offer'){title='Когда связаться повторно?';fields=crmSelect('Ответственный','responsible_id',merged.responsible_id||state.me.id,crmUsers(),true)+crmField('Следующее действие','next_action',merged.next_action||'Уточнить решение по КП','text',true)+crmField('Дата и время · МСК','next_contact',crmInputTime(merged.next_contact),'datetime-local',true);}
   else if(stage==='work'){return crmSave(d,b).catch(e=>toast(e.message,true));}
   else if(stage==='lost'){title='Почему сделка не состоялась?';fields=crmField('Причина отказа','lost_reason',merged.lost_reason||'','text',true);}
   else{return crmSave(d,b).catch(e=>toast(e.message,true));}
@@ -153,14 +153,13 @@ function crmNotesHtml(notes=[]){
 function crmEdit(original){
   const d=original||{title:'',client_id:'',stage:'new',responsible_id:state.me.id,budget:0,duties:0,paid:null,contact:{},tags:[],notes:[],tasks:[]};
   if(d.deleted_at){crmDialog('Сделка в отстойнике',`<p>${esc(d.title)}</p><p>${esc(crmClient(d.client_id)?.name)}</p>${d.lost_reason?`<p>Причина отказа: ${esc(d.lost_reason)}</p>`:''}<p>Восстановите сделку, чтобы изменить её.</p>`,null);return;}
-  const contact=d.contact||{};
+  const contact={...(d.contact||{}),...(crmClient(d.client_id)?.contacts?.[0]||{})};
   const actions=d.id?`<div class="crm-editor-actions">${!d.paid_on&&!['won','lost','act_ready','act_sent'].includes(d.stage)?'<button type="button" class="btn primary" id="crm-payment">Оплата получена</button>':''}<button type="button" class="btn" id="crm-client-open">Карточка клиента →</button><button type="button" class="btn" id="crm-upsell-add">Доп. продажа</button><button type="button" class="btn danger" id="crm-deal-delete">В отстойник</button></div>`:'';
   const body=`${actions}<div class="crm-deal-layout"><section class="crm-deal-fields"><div class="crm-form-grid">${crmField('Название сделки','title',d.title,'text',true)}
-    <label class="crm-field">Клиент 360<input name="client_name" list="crm-client-list" value="${esc(crmClient(d.client_id)?.name||'')}" required autocomplete="off"><datalist id="crm-client-list">${crm.clients.map(c=>`<option value="${esc(c.name)}"></option>`).join('')}</datalist></label>
+    <div class="crm-field crm-client-picker"><label for="crm-client-input">Клиент 360</label><input id="crm-client-input" name="client_name" value="${esc(crmClient(d.client_id)?.name||'')}" required autocomplete="off" role="combobox" aria-expanded="false" aria-controls="crm-client-options"><div id="crm-client-options" class="crm-client-options" role="listbox" hidden></div></div>
     ${crmSelect('Этап','stage',d.stage,Object.entries(CRM_LABELS).filter(([key])=>!['won','lost'].includes(key)||key===d.stage))}${crmSelect('Ответственный','responsible_id',d.responsible_id||'',crmUsers(),true)}
     ${crmField('Стоимость работ, ₽','budget',d.budget,'number',true)}
-    ${crmField('Оплачено за работы, ₽ · пусто = неизвестно','paid',d.paid??'','number')}
-    ${crmSelect('Направление услуги','direction',d.direction||'',[['','— Не указано'],...CRM_DIRECTIONS])}${crmField('Дата первой передачи в работу','work_started_on',d.work_started_on||'','date')}<p class="hint">Дата заполняется при первом переводе в работу. Для старых сделок укажите её вручную.</p>${crmField('Источник','source',d.source)}
+    ${crmSelect('Направление услуги','direction',d.direction||'',[['','— Не указано'],...CRM_DIRECTIONS])}${crmField('Дата оплаты','paid_on',d.paid_on||d.work_started_on||'','date')}${crmField('Источник','source',d.source)}
     ${crmField('Срок выполнения, рабочих дней','work_days',d.work_days||'','number')}<p class="hint">${d.paid_on?'Изменение срока пересчитает дату сдачи от сохранённой даты оплаты.':'Согласованный срок. Дата сдачи рассчитается после отметки оплаты.'}</p>
     ${d.paid_on?`<p class="hint">Запуск по оплате: ${esc(d.paid_on.split('-').reverse().join('.'))} · ${d.work_days} рабочих дней</p>`:''}${crmField('Дата окончания','deadline',d.deadline?.slice(0,10),'date')}
     </div><h3>Контакт</h3><div class="crm-form-grid">${[['name','Имя'],['email','Email'],['phone','Телефон'],['telegram','Telegram'],['position','Должность']].map(([k,l])=>crmField(l,'contact_'+k,contact[k]||'',k==='email'?'email':'text')).join('')}</div>
@@ -168,7 +167,7 @@ function crmEdit(original){
     </section><section class="crm-deal-activity"><h3>Примечание</h3>${d.lost_reason?`<p class="hint">Причина отказа: ${esc(d.lost_reason)}</p>`:''}<label class="crm-field">Текст примечания<textarea name="new_note" rows="4"></textarea></label><button type="button" class="btn primary" id="crm-note-add" ${d.id?'':'disabled'}>Записать</button>${d.id?'':'<p class="hint">Сначала создайте сделку. Введённое примечание сохранится вместе с ней.</p>'}<div class="crm-notes" id="crm-notes-list">${crmNotesHtml(d.notes)}</div></section></div>`;
   const el=crmDialog(d.id?'Карточка сделки':'Новая сделка',body,async f=>{
     const client=crm.clients.find(c=>c.name===f.client_name.trim());if(!client)throw Error('Выберите существующего клиента из списка. Нового клиента сначала создайте в «Клиенты 360».');
-    const patch={title:f.title,client_id:client.id,responsible_id:f.responsible_id,stage:f.stage,budget:Number(f.budget),paid:f.paid===''?null:Number(f.paid),direction:f.direction,work_days:f.work_days===''?0:Number(f.work_days),work_started_on:f.work_started_on,source:f.source,executor_id:f.responsible_id||null,deadline:f.deadline,contact:{...contact,...Object.fromEntries(['name','email','phone','telegram','position'].map(k=>[k,f['contact_'+k]]))}};
+    const patch={title:f.title,client_id:client.id,responsible_id:f.responsible_id,stage:f.stage,budget:Number(f.budget),direction:f.direction,work_days:f.work_days===''?0:Number(f.work_days),paid_on:f.paid_on,source:f.source,executor_id:f.responsible_id||null,deadline:f.deadline,contact:{...contact,...Object.fromEntries(['name','email','phone','telegram','position'].map(k=>[k,f['contact_'+k]]))}};
     if(d.id)patch.revision=d.revision;
     if(d.parent_deal_id)patch.parent_deal_id=d.parent_deal_id;
     if(f.new_note.trim()){if(d.id)throw Error('Нажмите «Записать», чтобы сохранить примечание.');patch.notes=[f.new_note.trim()];}
@@ -176,7 +175,19 @@ function crmEdit(original){
   });
   el.classList.add('crm-deal-dialog');
   const workDaysInput=el.querySelector('[name=work_days]');workDaysInput.min=1;workDaysInput.max=500;workDaysInput.step=1;workDaysInput.required=!!d.paid_on;
-  if(!d.id){el.querySelector('[name="client_name"]').onchange=e=>{const c=crm.clients.find(x=>x.name===e.target.value);const t=c?.contacts?.[0];if(t)for(const k of ['name','email','phone','telegram']){const input=el.querySelector(`[name="contact_${k}"]`);if(!input.value)input.value=t[k]||'';}};}
+  const clientInput=el.querySelector('[name=client_name]'),options=el.querySelector('#crm-client-options');
+  let selectedClient=d.client_id;
+  const syncContacts=client=>{const t=client?.contacts?.[0]||{};for(const key of ['name','email','phone','telegram','position'])el.querySelector(`[name="contact_${key}"]`).value=t[key]||'';};
+  const chooseClient=client=>{selectedClient=client.id;clientInput.value=client.name;syncContacts(client);options.hidden=true;clientInput.setAttribute('aria-expanded','false');};
+  const showClients=()=>{const query=clientInput.value.trim().toLocaleLowerCase('ru');const list=crm.clients.filter(c=>!query||c.name.toLocaleLowerCase('ru').includes(query));options.innerHTML=list.map(c=>`<button type="button" role="option" data-client-choice="${esc(c.id)}">${esc(c.name)}</button>`).join('')||'<div class="hint">Клиент не найден</div>';options.hidden=false;clientInput.setAttribute('aria-expanded','true');options.querySelectorAll('[data-client-choice]').forEach(b=>b.onclick=()=>chooseClient(crmClient(b.dataset.clientChoice)));};
+  clientInput.onfocus=showClients;clientInput.oninput=()=>{showClients();const found=crm.clients.find(c=>c.name===clientInput.value.trim());if(found&&found.id!==selectedClient)chooseClient(found);};
+  clientInput.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();options.hidden=true;}if(e.key==='ArrowDown'){e.preventDefault();options.querySelector('button')?.focus();}};
+  el.addEventListener('click',e=>{if(!e.target.closest('.crm-client-picker')){options.hidden=true;clientInput.setAttribute('aria-expanded','false');}});
+  const paidInput=el.querySelector('[name=paid_on]'),deadlineInput=el.querySelector('[name=deadline]');deadlineInput.readOnly=true;paidInput.max=new Date(Date.now()+10800000).toISOString().slice(0,10);
+  let deadlineVersion=0;
+  const updateDeadline=async()=>{const version=++deadlineVersion;if(!paidInput.value||!workDaysInput.value){deadlineInput.value='';return;}try{const result=await api('/crm/deadline?date='+encodeURIComponent(paidInput.value)+'&days='+encodeURIComponent(workDaysInput.value));if(version===deadlineVersion)deadlineInput.value=result.deadline;}catch(e){if(version===deadlineVersion){deadlineInput.value='';toast(e.message,true);}}};
+  paidInput.onchange=updateDeadline;workDaysInput.oninput=updateDeadline;
+
   if(d.id){
     $('#crm-note-add').onclick=async()=>{
       if(crm.busy)return;
